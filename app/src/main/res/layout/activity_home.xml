@@ -36,4 +36,20 @@
         android:layout_marginTop="16dp"
         android:text="🏃  러닝 기록 (GPS)"
         android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/openDexButton"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_marginTop="16dp"
+        android:text="📒  도감"
+        android:textSize="18sp" />
+
+    <Button
+        android:id="@+id/openTitleButton"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:layout_marginTop="16dp"
+        android:text="🏅  칭호"
+        android:textSize="18sp" />
 </LinearLayout>

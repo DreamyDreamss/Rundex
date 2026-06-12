@@ -18,5 +18,11 @@ class HomeActivity : Activity() {
         findViewById<Button>(R.id.openTrackButton).setOnClickListener {
             startActivity(Intent(this, TrackActivity::class.java))
         }
+        findViewById<Button>(R.id.openDexButton).setOnClickListener {
+            startActivity(Intent(this, DexActivity::class.java))
+        }
+        findViewById<Button>(R.id.openTitleButton).setOnClickListener {
+            startActivity(Intent(this, TitleActivity::class.java))
+        }
     }
 }

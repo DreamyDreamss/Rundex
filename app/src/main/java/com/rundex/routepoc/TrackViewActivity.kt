@@ -1,8 +1,11 @@
 package com.rundex.routepoc
 
 import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
+import android.widget.Button
 import android.widget.TextView
+import androidx.core.content.FileProvider
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
@@ -41,6 +44,23 @@ class TrackViewActivity : Activity() {
             sb.append("\n${i + 1} km — ${RunStats.formatPaceSec(ms / 1000.0)}")
         }
         findViewById<TextView>(R.id.viewStatsText).text = sb.toString()
+
+        findViewById<Button>(R.id.exportGpxButton).setOnClickListener {
+            val dir = File(cacheDir, "gpx").apply { mkdirs() }
+            val f = File(dir, "run-${track.id}.gpx")
+            f.writeText(GpxExporter.toGpx(track))
+            val uri = FileProvider.getUriForFile(this, "com.rundex.routepoc.fileprovider", f)
+            startActivity(
+                Intent.createChooser(
+                    Intent(Intent.ACTION_SEND).apply {
+                        type = "application/gpx+xml"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    },
+                    "GPX 공유"
+                )
+            )
+        }
 
         mapView = findViewById(R.id.viewMapView)
         mapView.onCreate(savedInstanceState)

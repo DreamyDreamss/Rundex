@@ -79,7 +79,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             val track = TrackRecorder.stop(System.currentTimeMillis())
             if (track.points.size >= 2) {
                 store.save(track)
-                Toast.makeText(this, "기록 저장됨 (${formatKm(track.distanceMeters)})", Toast.LENGTH_LONG).show()
+                applyRunToDex(track)
             } else {
                 Toast.makeText(this, "좌표가 부족해 저장하지 않음", Toast.LENGTH_LONG).show()
             }
@@ -99,6 +99,58 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         }
         updateButton()
         refreshStats()
+    }
+
+    /** 러닝 결과를 도감·칭호에 반영하고 결과 다이얼로그 표시 */
+    private fun applyRunToDex(track: SavedTrack) {
+        val dataDir = File(filesDir, "data")
+        val index = RegionRepo.get(this)
+        var result: ApplyResult? = null
+        var newTitles: List<TitleDef> = emptyList()
+        if (index != null) {
+            val byRegion = RunProcessor.distanceByRegion(track.points, index)
+            val names = index.regions.associate { it.code to it.name }
+            val dex = DexStore(dataDir)
+            result = dex.applyRun(byRegion, names, track.distanceMeters, track.startedAtMs)
+            val hour = java.util.Calendar.getInstance()
+                .apply { timeInMillis = track.startedAtMs }
+                .get(java.util.Calendar.HOUR_OF_DAY)
+            val ctx = TitleContext(
+                discoveredCount = dex.discoveredCount(),
+                lifetimeMeters = dex.lifetimeMeters(),
+                anyBronze = dex.bestGradeReached(Grade.BRONZE),
+                anyGold = dex.bestGradeReached(Grade.GOLD),
+                runStartHour = hour,
+            )
+            newTitles = TitleEngine.evaluate(ctx, TitleStore(dataDir), System.currentTimeMillis())
+        }
+
+        val sb = StringBuilder()
+        sb.append("${formatKm(track.distanceMeters)} · ${formatDuration(track.durationMs)} 기록 저장됨")
+        if (index == null) {
+            sb.append("\n\n도감 데이터를 불러올 수 없어 도감 반영을 건너뜀")
+        } else if (result != null) {
+            if (result.newRegions.isNotEmpty()) {
+                sb.append("\n\n🗺 새 동 ${result.newRegions.size}곳 발견!")
+                sb.append("\n${result.newRegions.joinToString(", ") { it.name }}")
+            }
+            result.gradeUps.forEach {
+                sb.append("\n⬆ ${it.name} ${it.from.label} → ${it.to.label} 승급!")
+            }
+            if (result.newRegions.isEmpty() && result.gradeUps.isEmpty()) {
+                sb.append("\n\n도감 변동 없음 (서울 밖이거나 기존 지역)")
+            }
+        }
+        newTitles.forEach { sb.append("\n🏅 칭호 획득: [${it.name}]") }
+
+        AlertDialog.Builder(this)
+            .setTitle("러닝 완료")
+            .setMessage(sb.toString())
+            .setPositiveButton("확인", null)
+            .setNeutralButton("도감 보기") { _, _ ->
+                startActivity(Intent(this, DexActivity::class.java))
+            }
+            .show()
     }
 
     private fun hasPermissions(): Boolean =

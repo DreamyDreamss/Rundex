@@ -31,6 +31,23 @@
             android:name=".TrackViewActivity"
             android:label="기록 보기"
             android:exported="false" />
+        <activity
+            android:name=".DexActivity"
+            android:label="도감"
+            android:exported="false" />
+        <activity
+            android:name=".TitleActivity"
+            android:label="칭호"
+            android:exported="false" />
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.rundex.routepoc.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <service
             android:name=".TrackingService"
             android:exported="false"
