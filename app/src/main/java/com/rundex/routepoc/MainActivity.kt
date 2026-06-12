@@ -1,12 +1,17 @@
 package com.rundex.routepoc
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
@@ -33,6 +38,7 @@ class MainActivity : Activity() {
     private var map: MapLibreMap? = null
     private var routeSource: GeoJsonSource? = null
     private var waypointSource: GeoJsonSource? = null
+    private var meSource: GeoJsonSource? = null
 
     private val state = RouteState()
     private val routing = RoutingClient()
@@ -50,6 +56,7 @@ class MainActivity : Activity() {
                 redraw()
             }
         }
+        findViewById<Button>(R.id.myLocationButton).setOnClickListener { goToMyLocation() }
 
         mapView = findViewById(R.id.mapView)
         mapView.onCreate(savedInstanceState)
@@ -86,6 +93,46 @@ class MainActivity : Activity() {
                 circleStrokeWidth(2f),
             )
         )
+        meSource = GeoJsonSource("me-src").also(style::addSource)
+        style.addLayer(
+            CircleLayer("me-layer", "me-src").withProperties(
+                circleRadius(7f),
+                circleColor("#34C759"),
+                circleStrokeColor("#FFFFFF"),
+                circleStrokeWidth(2f),
+            )
+        )
+    }
+
+    private fun goToMyLocation() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ), 2
+            )
+            return
+        }
+        LocationServices.getFusedLocationProviderClient(this)
+            .getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+            .addOnSuccessListener { loc ->
+                if (loc == null) {
+                    Toast.makeText(this, "위치를 가져올 수 없습니다", Toast.LENGTH_SHORT).show()
+                    return@addOnSuccessListener
+                }
+                meSource?.setGeoJson(Point.fromLngLat(loc.longitude, loc.latitude))
+                map?.animateCamera(
+                    CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 15.0)
+                )
+            }
+    }
+
+    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
+        super.onRequestPermissionsResult(code, perms, results)
+        if (code == 2 && checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            goToMyLocation()
+        }
     }
 
     private fun onMapTap(latLng: LatLng) {
