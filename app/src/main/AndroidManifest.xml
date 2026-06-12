@@ -12,8 +12,7 @@
         android:label="RoutePOC"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
-            android:name=".MainActivity"
-            android:label="경로 POC"
+            android:name=".HomeActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -21,14 +20,13 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".MainActivity"
+            android:label="경로 만들기"
+            android:exported="false" />
+        <activity
             android:name=".TrackActivity"
-            android:label="GPS POC"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:label="러닝 기록"
+            android:exported="false" />
         <activity
             android:name=".TrackViewActivity"
             android:label="기록 보기"
