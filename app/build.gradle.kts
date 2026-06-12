@@ -28,6 +28,7 @@ android {
 dependencies {
     implementation("org.maplibre.gl:android-sdk:11.5.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation("junit:junit:4.13.2")
     // JVM 단위 테스트에서 android.jar의 org.json 스텁 대신 실제 구현 사용
     testImplementation("org.json:json:20240303")
