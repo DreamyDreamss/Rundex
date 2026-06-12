@@ -16,6 +16,7 @@ import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 import java.io.File
+import java.util.Locale
 
 /** 저장된 기록 1개를 지도 궤적 + 측정값으로 보여주는 읽기 전용 화면 */
 class TrackViewActivity : Activity() {
@@ -30,10 +31,16 @@ class TrackViewActivity : Activity() {
         val trackId = intent.getStringExtra("trackId")!!
         val track = TrackStore(File(filesDir, "tracks")).load(trackId)
 
-        findViewById<TextView>(R.id.viewStatsText).text =
-            "${TrackActivity.formatKm(track.distanceMeters)} · " +
-            "${TrackActivity.formatDuration(track.durationMs)} · " +
-            TrackActivity.formatPace(track.distanceMeters, track.durationMs)
+        val sb = StringBuilder()
+        sb.append("${TrackActivity.formatKm(track.distanceMeters)} · ")
+        sb.append("${TrackActivity.formatDuration(track.durationMs)} · ")
+        sb.append("평균 ${TrackActivity.formatPace(track.distanceMeters, track.durationMs)}")
+        sb.append("\n${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(track.distanceMeters, track.durationMs))} km/h")
+        sb.append(" · ${RunStats.calorieKcal(track.distanceMeters).toInt()} kcal")
+        RunStats.splitsMs(track.points).forEachIndexed { i, ms ->
+            sb.append("\n${i + 1} km — ${RunStats.formatPaceSec(ms / 1000.0)}")
+        }
+        findViewById<TextView>(R.id.viewStatsText).text = sb.toString()
 
         mapView = findViewById(R.id.viewMapView)
         mapView.onCreate(savedInstanceState)

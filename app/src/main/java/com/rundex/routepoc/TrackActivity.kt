@@ -141,9 +141,21 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
 
     private fun refreshStats() {
         if (TrackRecorder.recording) {
-            val elapsed = System.currentTimeMillis() - TrackRecorder.startedAtMs
-            statsText.text =
-                "${formatKm(TrackRecorder.distanceMeters)} · ${formatDuration(elapsed)} · ${formatPace(TrackRecorder.distanceMeters, elapsed)}"
+            val now = System.currentTimeMillis()
+            val elapsed = now - TrackRecorder.startedAtMs
+            val dist = TrackRecorder.distanceMeters
+            val currentPace = RunStats.currentPaceSecPerKm(TrackRecorder.points, now)
+            val splits = RunStats.splitsMs(TrackRecorder.points)
+            val sb = StringBuilder()
+            sb.append("${formatKm(dist)} · ${formatDuration(elapsed)} · 평균 ${formatPace(dist, elapsed)}")
+            sb.append("\n현재 ")
+            sb.append(currentPace?.let { "${RunStats.formatPaceSec(it)}/km" } ?: "-'--\"/km")
+            sb.append(" · ${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(dist, elapsed))} km/h")
+            sb.append(" · ${RunStats.calorieKcal(dist).toInt()} kcal")
+            if (splits.isNotEmpty()) {
+                sb.append("\n랩 ${splits.size}km ${RunStats.formatPaceSec(splits.last() / 1000.0)}")
+            }
+            statsText.text = sb.toString()
         } else if (TrackRecorder.points.isEmpty()) {
             statsText.text = "기록 대기 중"
         }
