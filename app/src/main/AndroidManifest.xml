@@ -11,7 +11,7 @@
 
     <application
         android:label="러닝도감"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/AppTheme">
         <activity
             android:name=".TrackActivity"
             android:label="러닝도감"
