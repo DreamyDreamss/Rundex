@@ -10,10 +10,11 @@
     <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
-        android:label="RoutePOC"
+        android:label="러닝도감"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
-            android:name=".HomeActivity"
+            android:name=".TrackActivity"
+            android:label="러닝도감"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -25,8 +26,8 @@
             android:label="경로 만들기"
             android:exported="false" />
         <activity
-            android:name=".TrackActivity"
-            android:label="러닝 기록"
+            android:name=".ProfileActivity"
+            android:label="프로필"
             android:exported="false" />
         <activity
             android:name=".TrackViewActivity"

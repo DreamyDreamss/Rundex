@@ -67,6 +67,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
         setContentView(R.layout.activity_track)
+        NavBar.setup(this, R.id.navRun)
         store = TrackStore(File(filesDir, "tracks"))
 
         statsText = findViewById(R.id.statsText)

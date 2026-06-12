@@ -1,43 +1,65 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:orientation="vertical">
 
-    <org.maplibre.android.maps.MapView
-        android:id="@+id/trackMapView"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="0dp"
+        android:layout_weight="1">
 
-    <TextView
-        android:id="@+id/statsText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:layout_marginTop="24dp"
-        android:background="#CCFFFFFF"
-        android:padding="12dp"
-        android:text="기록 대기 중"
-        android:textSize="16sp"
-        android:textStyle="bold" />
+        <org.maplibre.android.maps.MapView
+            android:id="@+id/trackMapView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
 
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="32dp"
-        android:orientation="horizontal">
+        <TextView
+            android:id="@+id/statsText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top"
+            android:layout_margin="16dp"
+            android:background="@drawable/card_bg"
+            android:elevation="4dp"
+            android:padding="16dp"
+            android:text="기록 대기 중"
+            android:textColor="@color/textDark"
+            android:textSize="16sp"
+            android:textStyle="bold" />
 
-        <Button
-            android:id="@+id/startStopButton"
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="기록 시작" />
+            android:layout_gravity="bottom|center_horizontal"
+            android:layout_marginBottom="20dp"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/historyButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="16dp"
-            android:text="저장된 기록" />
-    </LinearLayout>
-</FrameLayout>
+            <Button
+                android:id="@+id/startStopButton"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:background="@drawable/btn_primary"
+                android:paddingStart="32dp"
+                android:paddingEnd="32dp"
+                android:text="기록 시작"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/historyButton"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginStart="12dp"
+                android:background="@drawable/btn_secondary"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:text="저장된 기록"
+                android:textColor="@color/textDark"
+                android:textSize="14sp" />
+        </LinearLayout>
+    </FrameLayout>
+
+    <include layout="@layout/bottom_nav" />
+</LinearLayout>

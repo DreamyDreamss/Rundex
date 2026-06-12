@@ -48,6 +48,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
         setContentView(R.layout.activity_main)
+        NavBar.setup(this, R.id.navPlan)
 
         distanceText = findViewById(R.id.distanceText)
         findViewById<Button>(R.id.undoButton).setOnClickListener {
