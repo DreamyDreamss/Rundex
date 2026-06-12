@@ -29,6 +29,15 @@
         android:text="마지막 점 취소" />
 
     <Button
+        android:id="@+id/runRouteButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|start"
+        android:layout_marginStart="16dp"
+        android:layout_marginBottom="32dp"
+        android:text="이 경로로 뛰기" />
+
+    <Button
         android:id="@+id/myLocationButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

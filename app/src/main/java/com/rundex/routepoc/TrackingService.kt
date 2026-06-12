@@ -28,6 +28,7 @@ class TrackingService : Service() {
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             for (loc in result.locations) {
+                TrackRecorder.updateRaw(loc.latitude, loc.longitude)
                 TrackRecorder.addPoint(
                     loc.latitude, loc.longitude, loc.accuracy, System.currentTimeMillis()
                 )

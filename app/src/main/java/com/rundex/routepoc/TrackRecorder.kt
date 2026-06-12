@@ -56,6 +56,17 @@ object TrackRecorder {
     /** 검증용 — 이번 기록에서 필터가 폐기한 픽스 수 */
     val rejectedCount: Int get() = filter.rejectedCount
 
+    /** 필터와 무관한 최신 수신 픽스 — 실시간 위치 점·카메라 팔로우용 */
+    @Volatile var lastRawLat = Double.NaN; private set
+    @Volatile var lastRawLon = Double.NaN; private set
+
+    /** 모든 수신 픽스를 기록 채택 여부와 무관하게 반영하고 리스너에 통지 */
+    fun updateRaw(lat: Double, lon: Double) {
+        lastRawLat = lat
+        lastRawLon = lon
+        listeners.forEach { it.onUpdate() }
+    }
+
     fun reset() {
         recording = false
         startedAtMs = 0L

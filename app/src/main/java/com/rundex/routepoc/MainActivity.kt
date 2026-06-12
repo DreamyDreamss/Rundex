@@ -57,6 +57,7 @@ class MainActivity : Activity() {
             }
         }
         findViewById<Button>(R.id.myLocationButton).setOnClickListener { goToMyLocation() }
+        findViewById<Button>(R.id.runRouteButton).setOnClickListener { startFollowRun() }
 
         mapView = findViewById(R.id.mapView)
         mapView.onCreate(savedInstanceState)
@@ -101,6 +102,20 @@ class MainActivity : Activity() {
                 circleStrokeColor("#FFFFFF"),
                 circleStrokeWidth(2f),
             )
+        )
+    }
+
+    /** 완성된 경로를 저장하고 따라 뛰기 모드로 러닝 화면을 연다 */
+    private fun startFollowRun() {
+        val path = state.fullPath()
+        if (path.size < 2) {
+            Toast.makeText(this, "경로를 먼저 완성하세요 (점 2개 이상)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        PlannedRouteStore(java.io.File(filesDir, "data"))
+            .save(PlannedRoute(path, state.totalDistanceMeters()))
+        startActivity(
+            android.content.Intent(this, TrackActivity::class.java).putExtra("follow", true)
         )
     }
 

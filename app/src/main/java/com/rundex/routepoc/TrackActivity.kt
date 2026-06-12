@@ -5,18 +5,29 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.PropertyFactory.circleColor
+import org.maplibre.android.style.layers.PropertyFactory.circleRadius
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeColor
+import org.maplibre.android.style.layers.PropertyFactory.circleStrokeWidth
 import org.maplibre.android.style.layers.PropertyFactory.lineColor
 import org.maplibre.android.style.layers.PropertyFactory.lineWidth
 import org.maplibre.android.style.sources.GeoJsonSource
@@ -33,8 +44,16 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     private lateinit var mapView: MapView
     private lateinit var statsText: TextView
     private lateinit var startStopButton: Button
+    private var map: MapLibreMap? = null
     private var trackSource: GeoJsonSource? = null
+    private var planSource: GeoJsonSource? = null
+    private var meSource: GeoJsonSource? = null
     private lateinit var store: TrackStore
+
+    // 따라 뛰기 상태
+    private var plannedRoute: PlannedRoute? = null
+    private var offRoute = false
+    private var lastWarnMs = 0L
 
     private val ticker = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
@@ -55,19 +74,51 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         startStopButton.setOnClickListener { onStartStop() }
         findViewById<Button>(R.id.historyButton).setOnClickListener { showHistory() }
 
+        if (intent.getBooleanExtra("follow", false)) {
+            plannedRoute = PlannedRouteStore(File(filesDir, "data")).load()
+            if (plannedRoute == null) {
+                Toast.makeText(this, "계획 경로를 불러올 수 없습니다", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         mapView = findViewById(R.id.trackMapView)
         mapView.onCreate(savedInstanceState)
         mapView.getMapAsync { m ->
+            map = m
             m.cameraPosition = CameraPosition.Builder()
                 .target(LatLng(37.5512, 126.9882)).zoom(13.0).build()
             m.setStyle(Style.Builder().fromUri("https://tiles.openfreemap.org/styles/liberty")) { style ->
+                // 계획 경로(회색)를 먼저 깔고 그 위에 내 궤적(파랑), 위치 점 순서로
+                planSource = GeoJsonSource("plan-src").also(style::addSource)
+                style.addLayer(
+                    LineLayer("plan-layer", "plan-src").withProperties(
+                        lineColor("#9E9E9E"), lineWidth(7f)
+                    )
+                )
                 trackSource = GeoJsonSource("track-src").also(style::addSource)
                 style.addLayer(
                     LineLayer("track-layer", "track-src").withProperties(
                         lineColor("#007AFF"), lineWidth(5f)
                     )
                 )
+                meSource = GeoJsonSource("me-src").also(style::addSource)
+                style.addLayer(
+                    CircleLayer("me-layer", "me-src").withProperties(
+                        circleRadius(8f),
+                        circleColor("#34C759"),
+                        circleStrokeColor("#FFFFFF"),
+                        circleStrokeWidth(3f),
+                    )
+                )
                 redrawTrack()
+                plannedRoute?.let { plan ->
+                    planSource?.setGeoJson(
+                        LineString.fromLngLats(plan.points.map { Point.fromLngLat(it.lon, it.lat) })
+                    )
+                    m.cameraPosition = CameraPosition.Builder()
+                        .target(LatLng(plan.points.first().lat, plan.points.first().lon))
+                        .zoom(15.0).build()
+                }
             }
         }
         updateButton()
@@ -186,9 +237,52 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     // TrackRecorder.Listener — Service 콜백(메인 루퍼)에서 호출됨
     override fun onUpdate() {
         runOnUiThread {
+            updateMeAndCamera()
+            checkDeviation()
             refreshStats()
             redrawTrack()
         }
+    }
+
+    /** 최신 수신 픽스(필터 무관)로 위치 점 갱신 + 기록 중이면 카메라 팔로우 */
+    private fun updateMeAndCamera() {
+        val lat = TrackRecorder.lastRawLat
+        val lon = TrackRecorder.lastRawLon
+        if (lat.isNaN()) return
+        meSource?.setGeoJson(Point.fromLngLat(lon, lat))
+        val m = map ?: return
+        if (TrackRecorder.recording) {
+            if (m.cameraPosition.zoom < 14.0) {
+                m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 16.0))
+            } else {
+                m.animateCamera(CameraUpdateFactory.newLatLng(LatLng(lat, lon)))
+            }
+        }
+    }
+
+    /** 따라 뛰기 중 경로 이탈(40m 초과) 감지 — 진동은 10초 쿨다운 */
+    private fun checkDeviation() {
+        val plan = plannedRoute ?: return
+        if (!TrackRecorder.recording || TrackRecorder.lastRawLat.isNaN()) return
+        val d = RouteDeviation.minDistanceMeters(
+            TrackRecorder.lastRawLat, TrackRecorder.lastRawLon, plan.points
+        )
+        val nowOff = d > OFF_ROUTE_M
+        if (nowOff && System.currentTimeMillis() - lastWarnMs > WARN_COOLDOWN_MS) {
+            lastWarnMs = System.currentTimeMillis()
+            vibrate()
+        }
+        offRoute = nowOff
+    }
+
+    private fun vibrate() {
+        val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(VIBRATOR_SERVICE) as Vibrator
+        }
+        v.vibrate(VibrationEffect.createOneShot(500L, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
     private fun refreshStats() {
@@ -199,6 +293,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             val currentPace = RunStats.currentPaceSecPerKm(TrackRecorder.points, now)
             val splits = RunStats.splitsMs(TrackRecorder.points)
             val sb = StringBuilder()
+            if (offRoute) sb.append("⚠ 경로 이탈!\n")
             sb.append("${formatKm(dist)} · ${formatDuration(elapsed)} · 평균 ${formatPace(dist, elapsed)}")
             sb.append("\n현재 ")
             sb.append(currentPace?.let { "${RunStats.formatPaceSec(it)}/km" } ?: "-'--\"/km")
@@ -250,6 +345,9 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     }
 
     companion object {
+        private const val OFF_ROUTE_M = 40.0
+        private const val WARN_COOLDOWN_MS = 10_000L
+
         fun formatKm(meters: Double): String = String.format(Locale.US, "%.2f km", meters / 1000.0)
 
         fun formatDuration(ms: Long): String {
