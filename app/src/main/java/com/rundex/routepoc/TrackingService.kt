@@ -16,23 +16,27 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import java.io.File
 
 /**
  * 화면이 꺼져도 위치를 계속 수신하는 location Foreground Service.
- * 받은 좌표는 TrackRecorder로 전달만 한다.
+ * 받은 좌표를 TrackRecorder로 전달하고, 진행 상태를 디스크에 주기 저장(강제종료 복구용).
+ * START_STICKY로 시스템이 죽여도 재시작되며, 재시작 시 스냅샷에서 기록을 복원한다.
  */
 class TrackingService : Service() {
 
     private lateinit var fused: FusedLocationProviderClient
+    private lateinit var activeStore: ActiveRunStore
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
             for (loc in result.locations) {
                 TrackRecorder.updateRaw(loc.latitude, loc.longitude)
-                TrackRecorder.addPoint(
+                val accepted = TrackRecorder.addPoint(
                     loc.latitude, loc.longitude, loc.accuracy, System.currentTimeMillis(),
                     if (loc.hasAltitude()) loc.altitude else Double.NaN
                 )
+                if (accepted) activeStore.save(TrackRecorder.snapshot()) // 점마다 복구 스냅샷 갱신
             }
         }
     }
@@ -40,10 +44,15 @@ class TrackingService : Service() {
     override fun onCreate() {
         super.onCreate()
         fused = LocationServices.getFusedLocationProviderClient(this)
+        activeStore = ActiveRunStore(File(filesDir, "data"))
     }
 
     @SuppressLint("MissingPermission") // 권한은 TrackActivity에서 확인 후 시작
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 시스템이 죽인 뒤 재시작(intent == null)이면 스냅샷에서 복원
+        if (intent == null && !TrackRecorder.recording) {
+            activeStore.load()?.let { TrackRecorder.restore(it) }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
                 NOTIF_ID, buildNotification(),
@@ -56,7 +65,7 @@ class TrackingService : Service() {
             .setMinUpdateDistanceMeters(0f)
             .build()
         fused.requestLocationUpdates(request, callback, Looper.getMainLooper())
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onDestroy() {

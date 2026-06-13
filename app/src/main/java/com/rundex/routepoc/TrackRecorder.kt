@@ -87,4 +87,20 @@ object TrackRecorder {
         _points.clear()
         filter.reset()
     }
+
+    /** 진행 중 상태 스냅샷(복구 저장용) */
+    fun snapshot(): ActiveRun =
+        ActiveRun(startedAtMs, distanceMeters, elevationGainM, _points.toList())
+
+    /** 강제종료 후 디스크 스냅샷에서 기록 상태를 복원해 이어서 기록 */
+    fun restore(run: ActiveRun) {
+        reset()
+        recording = true
+        startedAtMs = run.startedAtMs
+        distanceMeters = run.distanceMeters
+        elevationGainM = run.elevationGainM
+        _points.addAll(run.points)
+        run.points.lastOrNull()?.let { filter.offer(it.lat, it.lon, 1f, it.timeMs) }
+        listeners.forEach { it.onUpdate() }
+    }
 }

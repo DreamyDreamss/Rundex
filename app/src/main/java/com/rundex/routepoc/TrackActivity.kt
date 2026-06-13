@@ -97,6 +97,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         startStopButton.setOnClickListener { onStartStop() }
         findViewById<Button>(R.id.historyButton).setOnClickListener { showHistory() }
         setUpSearch()
+        maybeOfferRecovery()
 
         if (intent.getBooleanExtra("follow", false)) {
             plannedRoute = PlannedRouteStore(File(filesDir, "data")).load()
@@ -279,6 +280,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     private fun onStartStop() {
         if (TrackRecorder.recording) {
             stopService(Intent(this, TrackingService::class.java))
+            ActiveRunStore(File(filesDir, "data")).clear() // 정상 종료 → 복구 스냅샷 제거
             val track = TrackRecorder.stop(System.currentTimeMillis())
             if (track.points.size >= 2) {
                 store.save(track)
@@ -297,11 +299,66 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                 )
                 return
             }
+            maybePromptBatteryExemption()
             TrackRecorder.start(System.currentTimeMillis())
             startForegroundService(Intent(this, TrackingService::class.java))
         }
         updateButton()
         refreshStats()
+    }
+
+    /** 비정상 종료로 남은 진행 기록이 있으면 이어서 기록할지/저장할지 제안 */
+    private fun maybeOfferRecovery() {
+        if (TrackRecorder.recording) return
+        val activeStore = ActiveRunStore(File(filesDir, "data"))
+        val run = activeStore.load() ?: return
+        if (run.points.size < 2) { activeStore.clear(); return }
+        AlertDialog.Builder(this)
+            .setTitle("기록이 복구되었습니다")
+            .setMessage("이전에 종료되지 않은 러닝(${formatKm(run.distanceMeters)})이 있습니다.")
+            .setPositiveButton("이어서 기록") { _, _ ->
+                TrackRecorder.restore(run)
+                startForegroundService(Intent(this, TrackingService::class.java))
+                updateButton(); refreshStats()
+            }
+            .setNeutralButton("저장하고 종료") { _, _ ->
+                val track = SavedTrack(
+                    id = run.startedAtMs.toString(),
+                    startedAtMs = run.startedAtMs,
+                    durationMs = (run.points.last().timeMs - run.startedAtMs).coerceAtLeast(0),
+                    distanceMeters = run.distanceMeters,
+                    points = run.points,
+                    elevationGainM = run.elevationGainM,
+                )
+                store.save(track)
+                activeStore.clear()
+                applyRunToDex(track)
+            }
+            .setNegativeButton("삭제") { _, _ -> activeStore.clear() }
+            .setCancelable(false)
+            .show()
+    }
+
+    /** 배터리 최적화 예외를 한 번만 안내 — 백그라운드 추적 끊김 방지(기획서 §8.4 최대 난관) */
+    private fun maybePromptBatteryExemption() {
+        val prefs = getSharedPreferences("profile", MODE_PRIVATE)
+        if (prefs.getBoolean("battery_prompt_shown", false)) return
+        val pm = getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+        prefs.edit().putBoolean("battery_prompt_shown", true).apply()
+        AlertDialog.Builder(this)
+            .setTitle("백그라운드 기록 안정화")
+            .setMessage("화면을 끄거나 다른 앱을 써도 러닝이 끊기지 않으려면 배터리 최적화 예외를 허용해 주세요. (특히 삼성 기기 권장)")
+            .setPositiveButton("설정 열기") { _, _ ->
+                runCatching {
+                    startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        android.net.Uri.parse("package:$packageName")))
+                }.onFailure {
+                    startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+            .setNegativeButton("나중에", null)
+            .show()
     }
 
     /** 러닝 결과를 도감·칭호에 반영하고 결과 다이얼로그 표시 */
