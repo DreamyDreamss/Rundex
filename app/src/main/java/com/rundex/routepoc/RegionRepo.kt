@@ -16,7 +16,7 @@ object RegionRepo {
         synchronized(this) {
             index?.let { return it }
             return try {
-                val json = context.assets.open("regions/seoul.geojson")
+                val json = context.assets.open("regions/korea.geojson")
                     .bufferedReader().use { it.readText() }
                 RegionIndex.fromGeoJson(json).also { index = it }
             } catch (e: Exception) {

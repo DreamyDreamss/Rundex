@@ -30,7 +30,8 @@ class TrackingService : Service() {
             for (loc in result.locations) {
                 TrackRecorder.updateRaw(loc.latitude, loc.longitude)
                 TrackRecorder.addPoint(
-                    loc.latitude, loc.longitude, loc.accuracy, System.currentTimeMillis()
+                    loc.latitude, loc.longitude, loc.accuracy, System.currentTimeMillis(),
+                    if (loc.hasAltitude()) loc.altitude else Double.NaN
                 )
             }
         }

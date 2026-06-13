@@ -40,6 +40,7 @@ class TrackViewActivity : Activity() {
         sb.append("평균 ${TrackActivity.formatPace(track.distanceMeters, track.durationMs)}")
         sb.append("\n${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(track.distanceMeters, track.durationMs))} km/h")
         sb.append(" · ${RunStats.calorieKcal(track.distanceMeters).toInt()} kcal")
+        sb.append(" · ▲${track.elevationGainM.toInt()}m")
         RunStats.splitsMs(track.points).forEachIndexed { i, ms ->
             sb.append("\n${i + 1} km — ${RunStats.formatPaceSec(ms / 1000.0)}")
         }

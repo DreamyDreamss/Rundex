@@ -15,9 +15,13 @@ object TrackRecorder {
     var recording = false; private set
     var startedAtMs = 0L; private set
     var distanceMeters = 0.0; private set
+    var elevationGainM = 0.0; private set
 
     private val _points = mutableListOf<TrackPoint>()
     val points: List<TrackPoint> get() = _points
+
+    private var lastAltitude = Double.NaN
+    private const val ELEV_THRESHOLD_M = 3.0
 
     private val listeners = CopyOnWriteArrayList<Listener>()
 
@@ -31,11 +35,17 @@ object TrackRecorder {
     }
 
     /** @return 점이 채택되면 true (기록 중 아님/필터 폐기면 false) */
-    fun addPoint(lat: Double, lon: Double, accuracyM: Float, nowMs: Long): Boolean {
+    fun addPoint(lat: Double, lon: Double, accuracyM: Float, nowMs: Long, altitudeM: Double = Double.NaN): Boolean {
         if (!recording || !filter.offer(lat, lon, accuracyM, nowMs)) return false
         val last = _points.lastOrNull()
         if (last != null) {
             distanceMeters += Haversine.meters(last.lat, last.lon, lat, lon)
+        }
+        if (!altitudeM.isNaN()) {
+            if (!lastAltitude.isNaN() && altitudeM - lastAltitude >= ELEV_THRESHOLD_M) {
+                elevationGainM += altitudeM - lastAltitude
+            }
+            lastAltitude = altitudeM
         }
         _points.add(TrackPoint(lat, lon, nowMs))
         listeners.forEach { it.onUpdate() }
@@ -50,6 +60,7 @@ object TrackRecorder {
             durationMs = nowMs - startedAtMs,
             distanceMeters = distanceMeters,
             points = _points.toList(),
+            elevationGainM = elevationGainM,
         )
     }
 
@@ -71,6 +82,8 @@ object TrackRecorder {
         recording = false
         startedAtMs = 0L
         distanceMeters = 0.0
+        elevationGainM = 0.0
+        lastAltitude = Double.NaN
         _points.clear()
         filter.reset()
     }

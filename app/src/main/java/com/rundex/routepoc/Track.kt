@@ -8,6 +8,7 @@ data class SavedTrack(
     val durationMs: Long,
     val distanceMeters: Double,
     val points: List<TrackPoint>,
+    val elevationGainM: Double = 0.0,
 )
 
 data class TrackSummary(

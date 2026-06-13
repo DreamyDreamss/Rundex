@@ -368,7 +368,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                 sb.append("\n⬆ ${it.name} ${it.from.label} → ${it.to.label} 승급!")
             }
             if (result.newRegions.isEmpty() && result.gradeUps.isEmpty()) {
-                sb.append("\n\n도감 변동 없음 (서울 밖이거나 기존 지역)")
+                sb.append("\n\n도감 변동 없음 (수집 지역 밖이거나 기존 지역)")
             }
         }
         newTitles.forEach { sb.append("\n🏅 칭호 획득: [${it.name}]") }
@@ -482,6 +482,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             sb.append(currentPace?.let { "${RunStats.formatPaceSec(it)}/km" } ?: "-'--\"/km")
             sb.append(" · ${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(dist, elapsed))} km/h")
             sb.append(" · ${RunStats.calorieKcal(dist).toInt()} kcal")
+            sb.append(" · ▲${TrackRecorder.elevationGainM.toInt()}m")
             if (splits.isNotEmpty()) {
                 sb.append("\n랩 ${splits.size}km ${RunStats.formatPaceSec(splits.last() / 1000.0)}")
             }

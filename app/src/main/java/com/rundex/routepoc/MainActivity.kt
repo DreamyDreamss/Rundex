@@ -51,8 +51,14 @@ class MainActivity : Activity() {
 
     private val state = RouteState()
     private val routing = RoutingClient()
+    private val elevation = ElevationClient()
     private var requestInFlight = false
     private var snapToRoad = true
+
+    // 경로계획 예상 상승고도(best-effort, 비동기) — 마지막 조회 결과 + 디바운스
+    private var planGainM: Int? = null
+    private val elevHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var elevRunnable: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -265,10 +271,34 @@ class MainActivity : Activity() {
     private fun updateStats(path: List<LatLngPoint>) {
         val meters = state.totalDistanceMeters()
         statDistanceValue.text = formatKm(meters)
-        statTimeValue.text = "${RouteStats.estimatedMinutes(meters)}분"
+        val mins = RouteStats.estimatedMinutes(meters)
+        statTimeValue.text = planGainM?.let { "${mins}분 · ▲${it}m" } ?: "${mins}분"
         val index = RegionRepo.get(this)
         val regions = if (index != null) RouteStats.distinctRegionCount(path, index) else 0
         statRegionValue.text = "${regions}개 동"
+        scheduleElevation(path)
+    }
+
+    /** 경로 변경 후 0.8초 디바운스로 예상 상승고도 조회(best-effort) */
+    private fun scheduleElevation(path: List<LatLngPoint>) {
+        elevRunnable?.let { elevHandler.removeCallbacks(it) }
+        if (path.size < 2) { planGainM = null; return }
+        val snapshot = path.toList()
+        val r = Runnable {
+            elevation.gainForRoute(snapshot) { result ->
+                result.onSuccess { gain ->
+                    runOnUiThread {
+                        // 경로가 그대로일 때만 반영(오래된 응답 무시)
+                        if (state.fullPath().size == snapshot.size) {
+                            planGainM = gain.toInt()
+                            statTimeValue.text = "${RouteStats.estimatedMinutes(state.totalDistanceMeters())}분 · ▲${planGainM}m"
+                        }
+                    }
+                }
+            }
+        }
+        elevRunnable = r
+        elevHandler.postDelayed(r, 800L)
     }
 
     private fun formatKm(meters: Double): String =

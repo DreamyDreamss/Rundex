@@ -17,6 +17,7 @@ class TrackStore(private val dir: File) {
             put("startedAtMs", track.startedAtMs)
             put("durationMs", track.durationMs)
             put("distanceMeters", track.distanceMeters)
+            put("elevationGainM", track.elevationGainM)
             put("points", JSONArray().apply {
                 track.points.forEach { p ->
                     put(JSONArray().apply { put(p.lat); put(p.lon); put(p.timeMs) })
@@ -51,6 +52,7 @@ class TrackStore(private val dir: File) {
                 val p = pts.getJSONArray(i)
                 TrackPoint(p.getDouble(0), p.getDouble(1), p.getLong(2))
             },
+            elevationGainM = o.optDouble("elevationGainM", 0.0),
         )
     }
 }

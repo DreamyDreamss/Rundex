@@ -37,7 +37,7 @@ class DexActivity : Activity() {
 
         findViewById<TextView>(R.id.dexHeader).text = if (index != null) {
             val pct = if (index.totalCount > 0) entries.size * 100.0 / index.totalCount else 0.0
-            "📒 서울 ${entries.size} / ${index.totalCount}\n도감 완성률 ${String.format(Locale.US, "%.1f", pct)}%"
+            "📒 전국 ${entries.size} / ${index.totalCount}\n도감 완성률 ${String.format(Locale.US, "%.1f", pct)}%"
         } else {
             "📒 도감 데이터를 불러올 수 없습니다"
         }
@@ -76,8 +76,10 @@ class DexActivity : Activity() {
             Grade.CARD -> "브론즈까지 ${String.format(Locale.US, "%.1f", (Grades.BRONZE_M - e.totalMeters) / 1000.0)}km"
             Grade.BRONZE -> "실버까지 ${String.format(Locale.US, "%.1f", (Grades.SILVER_M - e.totalMeters) / 1000.0)}km"
             Grade.SILVER -> "골드까지 ${String.format(Locale.US, "%.1f", (Grades.GOLD_M - e.totalMeters) / 1000.0)}km"
-            Grade.GOLD -> "다음 ★까지 " +
-                String.format(Locale.US, "%.1f", ((Grades.starsOf(e.totalMeters) + 1) * Grades.GOLD_M + Grades.GOLD_M - e.totalMeters) / 1000.0) + "km"
+            Grade.GOLD -> {
+                val nextStarTotal = Grades.GOLD_M + Grades.starThresholdMeters(Grades.starsOf(e.totalMeters) + 1)
+                "다음 ★까지 " + String.format(Locale.US, "%.1f", (nextStarTotal - e.totalMeters) / 1000.0) + "km"
+            }
         }
         return "누적 ${km}km · $next"
     }
@@ -94,6 +96,11 @@ class DexActivity : Activity() {
         Grade.CARD -> (m / Grades.BRONZE_M * 100).toInt()
         Grade.BRONZE -> ((m - Grades.BRONZE_M) / (Grades.SILVER_M - Grades.BRONZE_M) * 100).toInt()
         Grade.SILVER -> ((m - Grades.SILVER_M) / (Grades.GOLD_M - Grades.SILVER_M) * 100).toInt()
-        Grade.GOLD -> (((m - Grades.GOLD_M) % Grades.GOLD_M) / Grades.GOLD_M * 100).toInt()
+        Grade.GOLD -> {
+            val k = Grades.starsOf(m)
+            val cur = Grades.GOLD_M + Grades.starThresholdMeters(k)
+            val next = Grades.GOLD_M + Grades.starThresholdMeters(k + 1)
+            ((m - cur) / (next - cur) * 100).toInt()
+        }
     }.coerceIn(0, 100)
 }
