@@ -1,11 +1,13 @@
 package com.rundex.routepoc
 
 import android.app.Activity
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.ListView
+import android.widget.ProgressBar
 import android.widget.TextView
 import java.io.File
 import java.util.Locale
@@ -17,6 +19,9 @@ class DexActivity : Activity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_dex)
         NavBar.setup(this, R.id.navDex)
+        findViewById<android.widget.Button>(R.id.openThemeDexButton).setOnClickListener {
+            startActivity(android.content.Intent(this, ThemeDexActivity::class.java))
+        }
         refresh()
     }
 
@@ -43,9 +48,19 @@ class DexActivity : Activity() {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val v = convertView ?: layoutInflater.inflate(R.layout.row_dex, parent, false)
                 val e = getItem(position)!!
+                val grade = Grades.gradeOf(e.totalMeters)
+                val color = getColor(gradeColorRes(grade))
                 v.findViewById<TextView>(R.id.rowTitle).text =
                     "${Grades.badge(e.totalMeters)} ${e.name}"
+                v.findViewById<TextView>(R.id.rowGrade).apply {
+                    text = grade.label + if (grade == Grade.GOLD) " ★${Grades.starsOf(e.totalMeters)}" else ""
+                    setTextColor(color)
+                }
                 v.findViewById<TextView>(R.id.rowSub).text = buildSub(e)
+                v.findViewById<ProgressBar>(R.id.rowProgress).apply {
+                    progress = gradeProgressPct(e.totalMeters)
+                    progressTintList = ColorStateList.valueOf(color)
+                }
                 return v
             }
         }
@@ -61,9 +76,24 @@ class DexActivity : Activity() {
             Grade.CARD -> "브론즈까지 ${String.format(Locale.US, "%.1f", (Grades.BRONZE_M - e.totalMeters) / 1000.0)}km"
             Grade.BRONZE -> "실버까지 ${String.format(Locale.US, "%.1f", (Grades.SILVER_M - e.totalMeters) / 1000.0)}km"
             Grade.SILVER -> "골드까지 ${String.format(Locale.US, "%.1f", (Grades.GOLD_M - e.totalMeters) / 1000.0)}km"
-            Grade.GOLD -> "골드 ★${Grades.starsOf(e.totalMeters)} — 다음 ★까지 " +
+            Grade.GOLD -> "다음 ★까지 " +
                 String.format(Locale.US, "%.1f", ((Grades.starsOf(e.totalMeters) + 1) * Grades.GOLD_M + Grades.GOLD_M - e.totalMeters) / 1000.0) + "km"
         }
-        return "${Grades.gradeOf(e.totalMeters).label} · 누적 ${km}km · $next"
+        return "누적 ${km}km · $next"
     }
+
+    private fun gradeColorRes(g: Grade): Int = when (g) {
+        Grade.CARD -> R.color.gradeCard
+        Grade.BRONZE -> R.color.gradeBronze
+        Grade.SILVER -> R.color.gradeSilver
+        Grade.GOLD -> R.color.gradeGold
+    }
+
+    /** 현재 등급 구간 내 진행률(%) — 프로그레스 바용 */
+    private fun gradeProgressPct(m: Double): Int = when (Grades.gradeOf(m)) {
+        Grade.CARD -> (m / Grades.BRONZE_M * 100).toInt()
+        Grade.BRONZE -> ((m - Grades.BRONZE_M) / (Grades.SILVER_M - Grades.BRONZE_M) * 100).toInt()
+        Grade.SILVER -> ((m - Grades.SILVER_M) / (Grades.GOLD_M - Grades.SILVER_M) * 100).toInt()
+        Grade.GOLD -> (((m - Grades.GOLD_M) % Grades.GOLD_M) / Grades.GOLD_M * 100).toInt()
+    }.coerceIn(0, 100)
 }

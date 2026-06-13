@@ -38,8 +38,28 @@
             android:label="도감"
             android:exported="false" />
         <activity
+            android:name=".ThemeDexActivity"
+            android:label="테마 도감"
+            android:exported="false" />
+        <activity
             android:name=".TitleActivity"
             android:label="칭호"
+            android:exported="false" />
+        <activity
+            android:name=".DiscoverActivity"
+            android:label="추천 코스"
+            android:exported="false" />
+        <activity
+            android:name=".FeedActivity"
+            android:label="피드"
+            android:exported="false" />
+        <activity
+            android:name=".UsersActivity"
+            android:label="친구 찾기"
+            android:exported="false" />
+        <activity
+            android:name=".CrewActivity"
+            android:label="크루"
             android:exported="false" />
         <provider
             android:name="androidx.core.content.FileProvider"

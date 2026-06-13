@@ -14,16 +14,45 @@
         android:layout_height="wrap_content"
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="24dp"
-        android:background="#CCFFFFFF"
-        android:padding="12dp"
+        android:background="@drawable/card_bg"
+        android:elevation="4dp"
+        android:paddingStart="20dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="14dp"
+        android:textColor="@color/textDark"
         android:textSize="16sp"
         android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/exportGpxButton"
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|center_horizontal"
         android:layout_marginBottom="32dp"
-        android:text="GPX 내보내기" />
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/shareCardButton"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:background="@drawable/btn_primary"
+            android:paddingStart="28dp"
+            android:paddingEnd="28dp"
+            android:text="스토리 공유"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/exportGpxButton"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/btn_secondary"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:text="GPX"
+            android:textColor="@color/textDark"
+            android:textSize="15sp" />
+    </LinearLayout>
 </FrameLayout>

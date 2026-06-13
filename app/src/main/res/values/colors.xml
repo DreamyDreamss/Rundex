@@ -2,9 +2,25 @@
 <resources>
     <color name="primary">#FF5A2D</color>
     <color name="primaryDark">#E04A20</color>
+    <color name="primaryLight">#FF8A5C</color>
+    <color name="accent">#3D7EFF</color>
+    <color name="success">#2ECC71</color>
     <color name="bg">#FAFAFA</color>
     <color name="card">#FFFFFF</color>
-    <color name="textDark">#1A1A1A</color>
+    <color name="textDark">#1C1C1E</color>
     <color name="textGrey">#8E8E93</color>
-    <color name="divider">#E5E5EA</color>
+    <color name="divider">#EFEFF0</color>
+    <color name="ripplePrimary">#33FFFFFF</color>
+    <color name="rippleDark">#14000000</color>
+    <color name="scrim">#B3000000</color>
+    <color name="saveBlue">#3D7EFF</color>
+    <color name="saveBlueDark">#2E63CC</color>
+    <color name="iconCircle">#F0F1F5</color>
+    <color name="iconTint">#5B6B8C</color>
+    <color name="danger">#FF3B30</color>
+    <color name="chipBg">#FFF0EA</color>
+    <color name="gradeCard">#AEB2BC</color>
+    <color name="gradeBronze">#CD7F32</color>
+    <color name="gradeSilver">#8E9196</color>
+    <color name="gradeGold">#F5A623</color>
 </resources>

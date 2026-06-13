@@ -45,6 +45,8 @@ class TrackViewActivity : Activity() {
         }
         findViewById<TextView>(R.id.viewStatsText).text = sb.toString()
 
+        findViewById<Button>(R.id.shareCardButton).setOnClickListener { shareStoryCard(track) }
+
         findViewById<Button>(R.id.exportGpxButton).setOnClickListener {
             val dir = File(cacheDir, "gpx").apply { mkdirs() }
             val f = File(dir, "run-${track.id}.gpx")
@@ -80,6 +82,32 @@ class TrackViewActivity : Activity() {
                 m.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds.build(), 100))
             }
         }
+    }
+
+    /** 경로+측정값을 이미지 카드로 렌더해 공유(인스타 스토리 등) */
+    private fun shareStoryCard(track: SavedTrack) {
+        val dataDir = File(filesDir, "data")
+        val owned = TitleStore(dataDir).owned()
+        val repId = getSharedPreferences("profile", MODE_PRIVATE).getString("rep_title_id", null)
+            ?.takeIf { owned.containsKey(it) } ?: owned.maxByOrNull { it.value }?.key
+        val repTitle = repId?.let { id -> Titles.all.firstOrNull { it.id == id }?.name }
+        val discovered = DexStore(dataDir).discoveredCount()
+
+        val bmp = ShareCardRenderer.render(track, repTitle, discovered)
+        val dir = File(cacheDir, "share").apply { mkdirs() }
+        val f = File(dir, "card-${track.id}.png")
+        f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        val uri = FileProvider.getUriForFile(this, "com.rundex.routepoc.fileprovider", f)
+        startActivity(
+            Intent.createChooser(
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "image/png"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                },
+                "스토리 공유"
+            )
+        )
     }
 
     override fun onStart() { super.onStart(); mapView.onStart() }

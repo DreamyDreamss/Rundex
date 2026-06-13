@@ -1,0 +1,77 @@
+[
+  {
+    "slug": "hangang-bridges",
+    "title": "한강 다리",
+    "emoji": "🌉",
+    "desc": "서울을 잇는 한강의 다리들을 모두 밟아보자",
+    "places": [
+      { "id": "hb_gwangjin", "name": "광진교",   "lat": 37.5448, "lon": 127.1117, "radiusM": 170 },
+      { "id": "hb_jamsil",   "name": "잠실대교", "lat": 37.5206, "lon": 127.0931, "radiusM": 170 },
+      { "id": "hb_cheongdam","name": "청담대교", "lat": 37.5269, "lon": 127.0531, "radiusM": 170 },
+      { "id": "hb_yeongdong","name": "영동대교", "lat": 37.5283, "lon": 127.0470, "radiusM": 170 },
+      { "id": "hb_seongsu",  "name": "성수대교", "lat": 37.5310, "lon": 127.0360, "radiusM": 170 },
+      { "id": "hb_dongho",   "name": "동호대교", "lat": 37.5305, "lon": 127.0167, "radiusM": 170 },
+      { "id": "hb_hannam",   "name": "한남대교", "lat": 37.5277, "lon": 127.0096, "radiusM": 170 },
+      { "id": "hb_banpo",    "name": "반포대교", "lat": 37.5130, "lon": 126.9966, "radiusM": 170 },
+      { "id": "hb_dongjak",  "name": "동작대교", "lat": 37.5106, "lon": 126.9794, "radiusM": 170 },
+      { "id": "hb_hangang",  "name": "한강대교", "lat": 37.5169, "lon": 126.9590, "radiusM": 170 },
+      { "id": "hb_mapo",     "name": "마포대교", "lat": 37.5390, "lon": 126.9456, "radiusM": 170 },
+      { "id": "hb_yanghwa",  "name": "양화대교", "lat": 37.5390, "lon": 126.9026, "radiusM": 170 }
+    ]
+  },
+  {
+    "slug": "five-palaces",
+    "title": "서울 5대 궁",
+    "emoji": "🏯",
+    "desc": "조선의 다섯 궁궐을 순례하는 코스",
+    "places": [
+      { "id": "fp_gyeongbok",   "name": "경복궁", "lat": 37.5796, "lon": 126.9770, "radiusM": 160 },
+      { "id": "fp_changdeok",   "name": "창덕궁", "lat": 37.5794, "lon": 126.9910, "radiusM": 160 },
+      { "id": "fp_changgyeong", "name": "창경궁", "lat": 37.5841, "lon": 126.9950, "radiusM": 160 },
+      { "id": "fp_deoksu",      "name": "덕수궁", "lat": 37.5658, "lon": 126.9751, "radiusM": 140 },
+      { "id": "fp_gyeonghui",   "name": "경희궁", "lat": 37.5710, "lon": 126.9686, "radiusM": 140 }
+    ]
+  },
+  {
+    "slug": "seoul-landmarks",
+    "title": "서울 랜드마크",
+    "emoji": "🗼",
+    "desc": "도시의 상징을 한 바퀴",
+    "places": [
+      { "id": "lm_nseoul",    "name": "N서울타워",  "lat": 37.5512, "lon": 126.9882, "radiusM": 160 },
+      { "id": "lm_ddp",       "name": "DDP",        "lat": 37.5663, "lon": 127.0090, "radiusM": 150 },
+      { "id": "lm_lotte",     "name": "롯데월드타워","lat": 37.5125, "lon": 127.1025, "radiusM": 180 },
+      { "id": "lm_63",        "name": "63빌딩",     "lat": 37.5198, "lon": 126.9405, "radiusM": 160 },
+      { "id": "lm_gwanghwa",  "name": "광화문광장", "lat": 37.5725, "lon": 126.9769, "radiusM": 150 },
+      { "id": "lm_seoulforest","name": "서울숲",     "lat": 37.5443, "lon": 127.0374, "radiusM": 200 },
+      { "id": "lm_cheonggye", "name": "청계광장",   "lat": 37.5689, "lon": 126.9784, "radiusM": 140 }
+    ]
+  },
+  {
+    "slug": "hangang-parks",
+    "title": "한강 공원",
+    "emoji": "🏞",
+    "desc": "한강을 따라 펼쳐진 공원들",
+    "places": [
+      { "id": "hp_yeouido", "name": "여의도한강공원", "lat": 37.5285, "lon": 126.9326, "radiusM": 220 },
+      { "id": "hp_banpo",   "name": "반포한강공원",   "lat": 37.5103, "lon": 126.9959, "radiusM": 220 },
+      { "id": "hp_ttukseom","name": "뚝섬한강공원",   "lat": 37.5300, "lon": 127.0690, "radiusM": 220 },
+      { "id": "hp_jamsil",  "name": "잠실한강공원",   "lat": 37.5180, "lon": 127.0820, "radiusM": 220 },
+      { "id": "hp_nanji",   "name": "난지한강공원",   "lat": 37.5667, "lon": 126.8770, "radiusM": 220 },
+      { "id": "hp_mangwon", "name": "망원한강공원",   "lat": 37.5557, "lon": 126.8975, "radiusM": 220 }
+    ]
+  },
+  {
+    "slug": "seoul-mountains",
+    "title": "서울 산·전망",
+    "emoji": "⛰",
+    "desc": "도심 속 봉우리에서 서울을 내려다보자",
+    "places": [
+      { "id": "mt_bukak",  "name": "북악산", "lat": 37.5921, "lon": 126.9817, "radiusM": 220 },
+      { "id": "mt_inwang", "name": "인왕산", "lat": 37.5810, "lon": 126.9580, "radiusM": 220 },
+      { "id": "mt_ansan",  "name": "안산",   "lat": 37.5747, "lon": 126.9430, "radiusM": 220 },
+      { "id": "mt_eungbong","name": "응봉산", "lat": 37.5483, "lon": 127.0360, "radiusM": 180 },
+      { "id": "mt_acha",   "name": "아차산", "lat": 37.5556, "lon": 127.1028, "radiusM": 240 }
+    ]
+  }
+]

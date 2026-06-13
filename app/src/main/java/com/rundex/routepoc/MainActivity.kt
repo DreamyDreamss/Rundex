@@ -2,9 +2,13 @@ package com.rundex.routepoc
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import com.google.android.gms.location.LocationServices
@@ -29,12 +33,17 @@ import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
 import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
+import java.util.Locale
 
 // AppCompat 의존성 없이 플랫폼 Activity 사용 (res 최소화)
 class MainActivity : Activity() {
 
     private lateinit var mapView: MapView
-    private lateinit var distanceText: TextView
+    private lateinit var statDistanceValue: TextView
+    private lateinit var statTimeValue: TextView
+    private lateinit var statRegionValue: TextView
+    private lateinit var snapIcon: ImageView
+    private lateinit var snapLabel: TextView
     private var map: MapLibreMap? = null
     private var routeSource: GeoJsonSource? = null
     private var waypointSource: GeoJsonSource? = null
@@ -43,6 +52,7 @@ class MainActivity : Activity() {
     private val state = RouteState()
     private val routing = RoutingClient()
     private var requestInFlight = false
+    private var snapToRoad = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,15 +60,23 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         NavBar.setup(this, R.id.navPlan)
 
-        distanceText = findViewById(R.id.distanceText)
-        findViewById<Button>(R.id.undoButton).setOnClickListener {
+        statDistanceValue = findViewById(R.id.statDistanceValue)
+        statTimeValue = findViewById(R.id.statTimeValue)
+        statRegionValue = findViewById(R.id.statRegionValue)
+        snapIcon = findViewById(R.id.snapIcon)
+        snapLabel = findViewById(R.id.snapLabel)
+
+        findViewById<View>(R.id.snapAction).setOnClickListener { toggleSnap() }
+        findViewById<View>(R.id.undoAction).setOnClickListener {
             if (!requestInFlight) {
                 state.undo()
                 redraw()
             }
         }
-        findViewById<Button>(R.id.myLocationButton).setOnClickListener { goToMyLocation() }
-        findViewById<Button>(R.id.runRouteButton).setOnClickListener { startFollowRun() }
+        findViewById<View>(R.id.returnAction).setOnClickListener { returnToStart() }
+        findViewById<View>(R.id.resetAction).setOnClickListener { confirmReset() }
+        findViewById<ImageView>(R.id.myLocationButton).setOnClickListener { goToMyLocation() }
+        findViewById<Button>(R.id.runRouteButton).setOnClickListener { saveCourse() }
 
         mapView = findViewById(R.id.mapView)
         mapView.onCreate(savedInstanceState)
@@ -106,18 +124,57 @@ class MainActivity : Activity() {
         )
     }
 
-    /** 완성된 경로를 저장하고 따라 뛰기 모드로 러닝 화면을 연다 */
-    private fun startFollowRun() {
+    /** 스냅 켜기/끄기 — 켜짐: 도로 따라 라우팅, 꺼짐: 직선 연결 */
+    private fun toggleSnap() {
+        snapToRoad = !snapToRoad
+        snapLabel.text = if (snapToRoad) "스냅 켜짐" else "스냅 꺼짐"
+        snapIcon.alpha = if (snapToRoad) 1.0f else 0.4f
+    }
+
+    private fun confirmReset() {
+        if (state.waypoints.isEmpty()) return
+        AlertDialog.Builder(this)
+            .setTitle("코스 초기화")
+            .setMessage("작성 중인 코스를 모두 지울까요?")
+            .setPositiveButton("초기화") { _, _ ->
+                state.reset()
+                redraw()
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    /** 마지막 점에서 출발지(첫 점)로 잇는 구간을 추가해 코스를 닫는다 */
+    private fun returnToStart() {
+        if (requestInFlight) return
+        if (state.waypoints.size < 2) {
+            Toast.makeText(this, "점을 2개 이상 찍어주세요", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val from = state.waypoints.last()
+        val start = state.waypoints.first()
+        addSegment(from, start)
+    }
+
+    /** 완성된 코스를 저장하고, 바로 따라 뛸지 묻는다 */
+    private fun saveCourse() {
         val path = state.fullPath()
         if (path.size < 2) {
-            Toast.makeText(this, "경로를 먼저 완성하세요 (점 2개 이상)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "코스를 먼저 완성하세요 (점 2개 이상)", Toast.LENGTH_SHORT).show()
             return
         }
         PlannedRouteStore(java.io.File(filesDir, "data"))
             .save(PlannedRoute(path, state.totalDistanceMeters()))
-        startActivity(
-            android.content.Intent(this, TrackActivity::class.java).putExtra("follow", true)
-        )
+        AlertDialog.Builder(this)
+            .setTitle("코스 저장됨")
+            .setMessage("${formatKm(state.totalDistanceMeters())} 코스를 저장했어요. 지금 따라 뛸까요?")
+            .setPositiveButton("뛰기") { _, _ ->
+                startActivity(
+                    Intent(this, TrackActivity::class.java).putExtra("follow", true)
+                )
+            }
+            .setNegativeButton("나중에", null)
+            .show()
     }
 
     private fun goToMyLocation() {
@@ -155,12 +212,25 @@ class MainActivity : Activity() {
         if (requestInFlight) return // 응답 대기 중 중복 탭 무시
         val tapped = LatLngPoint(latLng.latitude, latLng.longitude)
         val from = state.waypoints.lastOrNull()
-        state.addWaypoint(tapped)
-        redraw()
-        if (from == null) return // 첫 점은 라우팅 없음
+        if (from == null) {
+            state.addWaypoint(tapped)
+            redraw()
+            return // 첫 점은 구간 없음
+        }
+        addSegment(from, tapped)
+    }
 
+    /** from→to 구간을 추가 (스냅 켜짐이면 라우팅, 꺼짐이면 직선) */
+    private fun addSegment(from: LatLngPoint, to: LatLngPoint) {
+        state.addWaypoint(to)
+        redraw()
+        if (!snapToRoad) {
+            state.addLeg(RouteStats.straightLeg(from, to))
+            redraw()
+            return
+        }
         requestInFlight = true
-        routing.fetchRoute(from, tapped) { result ->
+        routing.fetchRoute(from, to) { result ->
             runOnUiThread {
                 requestInFlight = false
                 result.onSuccess { leg ->
@@ -189,13 +259,20 @@ class MainActivity : Activity() {
         } else {
             routeSource?.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
         }
-        val km = state.totalDistanceMeters() / 1000.0
-        distanceText.text = if (state.waypoints.isEmpty()) {
-            "지도를 탭해 경로를 만드세요"
-        } else {
-            String.format("총 거리 %.2f km", km)
-        }
+        updateStats(path)
     }
+
+    private fun updateStats(path: List<LatLngPoint>) {
+        val meters = state.totalDistanceMeters()
+        statDistanceValue.text = formatKm(meters)
+        statTimeValue.text = "${RouteStats.estimatedMinutes(meters)}분"
+        val index = RegionRepo.get(this)
+        val regions = if (index != null) RouteStats.distinctRegionCount(path, index) else 0
+        statRegionValue.text = "${regions}개 동"
+    }
+
+    private fun formatKm(meters: Double): String =
+        String.format(Locale.US, "%.1f km", meters / 1000.0)
 
     // MapView 수명주기 포워딩
     override fun onStart() { super.onStart(); mapView.onStart() }

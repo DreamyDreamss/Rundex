@@ -1,8 +1,8 @@
 .gradle/
 build/
 local.properties
-# 사내망 SSL 프록시 대응(로컬 전용) — 공개 저장소 제외
-app/src/debug/
 .idea/
 *.iml
 .kotlin/
+# 사내망 SSL 프록시 대응(로컬 전용)
+app/src/debug/

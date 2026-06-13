@@ -15,9 +15,10 @@ class TitleEngineTest {
         discovered: Int = 0,
         lifetime: Double = 0.0,
         bronze: Boolean = false,
+        silver: Boolean = false,
         gold: Boolean = false,
         hour: Int = 12,
-    ) = TitleContext(discovered, lifetime, bronze, gold, hour)
+    ) = TitleContext(discovered, lifetime, bronze, silver, gold, hour)
 
     @Test
     fun `첫 발견은 first_card만 부여한다`() {

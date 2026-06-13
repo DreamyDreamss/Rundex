@@ -12,7 +12,18 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.EditText
+import android.widget.ImageView
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import org.maplibre.android.MapLibre
@@ -48,7 +59,18 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     private var trackSource: GeoJsonSource? = null
     private var planSource: GeoJsonSource? = null
     private var meSource: GeoJsonSource? = null
+    private var searchSource: GeoJsonSource? = null
     private lateinit var store: TrackStore
+
+    // 주소 검색
+    private lateinit var searchInput: EditText
+    private lateinit var searchClear: ImageView
+    private lateinit var suggestionList: ListView
+    private val geocoding = GeocodingClient()
+    private val suggestionAdapter = SuggestionAdapter()
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var pendingSearch: Runnable? = null
+    private var suppressWatcher = false
 
     // 따라 뛰기 상태
     private var plannedRoute: PlannedRoute? = null
@@ -74,6 +96,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         startStopButton = findViewById(R.id.startStopButton)
         startStopButton.setOnClickListener { onStartStop() }
         findViewById<Button>(R.id.historyButton).setOnClickListener { showHistory() }
+        setUpSearch()
 
         if (intent.getBooleanExtra("follow", false)) {
             plannedRoute = PlannedRouteStore(File(filesDir, "data")).load()
@@ -111,6 +134,15 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                         circleStrokeWidth(3f),
                     )
                 )
+                searchSource = GeoJsonSource("search-src").also(style::addSource)
+                style.addLayer(
+                    CircleLayer("search-layer", "search-src").withProperties(
+                        circleRadius(9f),
+                        circleColor("#FF5A2D"),
+                        circleStrokeColor("#FFFFFF"),
+                        circleStrokeWidth(3f),
+                    )
+                )
                 redrawTrack()
                 plannedRoute?.let { plan ->
                     planSource?.setGeoJson(
@@ -123,6 +155,125 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             }
         }
         updateButton()
+    }
+
+    // ── 주소·장소 검색 ──────────────────────────────────────────────
+
+    private fun setUpSearch() {
+        searchInput = findViewById(R.id.searchInput)
+        searchClear = findViewById(R.id.searchClear)
+        suggestionList = findViewById(R.id.searchSuggestions)
+        suggestionList.adapter = suggestionAdapter
+
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if (suppressWatcher) return
+                val q = s?.toString()?.trim().orEmpty()
+                searchClear.visibility = if (q.isEmpty()) View.GONE else View.VISIBLE
+                scheduleSearch(q)
+            }
+        })
+
+        searchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                pendingSearch?.let(searchHandler::removeCallbacks)
+                runSearch(searchInput.text.toString().trim())
+                true
+            } else {
+                false
+            }
+        }
+
+        searchClear.setOnClickListener {
+            searchInput.setText("")
+            hideSuggestions()
+        }
+
+        suggestionList.setOnItemClickListener { _, _, position, _ ->
+            moveToPlace(suggestionAdapter.getItem(position))
+        }
+    }
+
+    /** 입력 디바운스(350ms) 후 검색 — 2자 미만이면 추천 숨김 */
+    private fun scheduleSearch(query: String) {
+        pendingSearch?.let(searchHandler::removeCallbacks)
+        if (query.length < 2) {
+            hideSuggestions()
+            return
+        }
+        val task = Runnable { runSearch(query) }
+        pendingSearch = task
+        searchHandler.postDelayed(task, 350L)
+    }
+
+    private fun runSearch(query: String) {
+        if (query.length < 2) return
+        geocoding.search(query) { result ->
+            runOnUiThread {
+                result.onSuccess { places ->
+                    if (places.isEmpty()) {
+                        hideSuggestions()
+                        Toast.makeText(this, "검색 결과가 없습니다", Toast.LENGTH_SHORT).show()
+                    } else {
+                        suggestionAdapter.submit(places)
+                        suggestionList.visibility = View.VISIBLE
+                    }
+                }.onFailure {
+                    Toast.makeText(this, "검색 실패: 네트워크를 확인하세요", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** 선택한 장소로 카메라 이동 + 마커 표시, 키보드·추천 닫기 */
+    private fun moveToPlace(place: GeoPlace) {
+        searchSource?.setGeoJson(Point.fromLngLat(place.lon, place.lat))
+        map?.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(LatLng(place.lat, place.lon), 16.0)
+        )
+        suppressWatcher = true
+        searchInput.setText(place.name)
+        searchInput.setSelection(place.name.length)
+        suppressWatcher = false
+        hideSuggestions()
+        hideKeyboard()
+    }
+
+    private fun hideSuggestions() {
+        suggestionAdapter.submit(emptyList())
+        suggestionList.visibility = View.GONE
+    }
+
+    private fun hideKeyboard() {
+        searchInput.clearFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(searchInput.windowToken, 0)
+    }
+
+    /** 검색 추천 목록 어댑터 (📍 대표 이름 + 전체 주소) */
+    private inner class SuggestionAdapter : BaseAdapter() {
+        private val items = ArrayList<GeoPlace>()
+
+        fun submit(places: List<GeoPlace>) {
+            items.clear()
+            items.addAll(places)
+            notifyDataSetChanged()
+        }
+
+        override fun getCount() = items.size
+        override fun getItem(position: Int) = items[position]
+        override fun getItemId(position: Int) = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: LayoutInflater.from(this@TrackActivity)
+                .inflate(R.layout.row_suggestion, parent, false)
+            val place = items[position]
+            view.findViewById<TextView>(R.id.suggestionName).text = place.name
+            view.findViewById<TextView>(R.id.suggestionAddress).text = place.displayName
+            return view
+        }
     }
 
     private fun onStartStop() {
@@ -157,6 +308,15 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     private fun applyRunToDex(track: SavedTrack) {
         val dataDir = File(filesDir, "data")
         val index = RegionRepo.get(this)
+
+        // 테마 도감 — 경로가 명소 반경을 지났는지 판정해 먼저 수집 반영
+        // (테마 완성 칭호를 같은 러닝에서 평가하기 위해 도감/칭호보다 앞에 둔다)
+        val path = track.points.map { LatLngPoint(it.lat, it.lon) }
+        val themeStore = ThemeStore(dataDir)
+        val collections = ThemeRepo.all(this)
+        val themeDeltas = themeStore.applyRun(path, collections)
+        val completedThemes = themeStore.completedSlugs(collections)
+
         var result: ApplyResult? = null
         var newTitles: List<TitleDef> = emptyList()
         if (index != null) {
@@ -171,10 +331,28 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                 discoveredCount = dex.discoveredCount(),
                 lifetimeMeters = dex.lifetimeMeters(),
                 anyBronze = dex.bestGradeReached(Grade.BRONZE),
+                anySilver = dex.bestGradeReached(Grade.SILVER),
                 anyGold = dex.bestGradeReached(Grade.GOLD),
                 runStartHour = hour,
+                completedThemeSlugs = completedThemes,
             )
             newTitles = TitleEngine.evaluate(ctx, TitleStore(dataDir), System.currentTimeMillis())
+        }
+
+        // 서버 동기화(best-effort) — ApiConfig 미설정 시 조용히 무시됨
+        runCatching {
+            val coords = org.json.JSONArray()
+            track.points.forEach { p ->
+                coords.put(org.json.JSONArray().put(p.lon).put(p.lat))
+            }
+            val body = org.json.JSONObject()
+                .put("startedAt", track.startedAtMs)
+                .put("endedAt", track.startedAtMs + track.durationMs)
+                .put("distanceM", track.distanceMeters)
+                .put("durationMs", track.durationMs)
+                .put("source", if (plannedRoute != null) "follow" else "free")
+                .put("coordinates", coords)
+            ApiClient(Session(this)).submitRun(body)
         }
 
         val sb = StringBuilder()
@@ -194,6 +372,10 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             }
         }
         newTitles.forEach { sb.append("\n🏅 칭호 획득: [${it.name}]") }
+        themeDeltas.forEach { d ->
+            sb.append("\n🌟 ${d.title} +${d.newPlaces.size} (${d.newPlaces.joinToString(", ") { it.name }})")
+            if (d.completed) sb.append("\n🏆 [${d.title}] 컬렉션 완성!")
+        }
 
         AlertDialog.Builder(this)
             .setTitle("러닝 완료")
@@ -321,7 +503,13 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     }
 
     private fun updateButton() {
-        startStopButton.text = if (TrackRecorder.recording) "기록 종료" else "기록 시작"
+        if (TrackRecorder.recording) {
+            startStopButton.text = "기록 종료"
+            startStopButton.setBackgroundResource(R.drawable.btn_danger)
+        } else {
+            startStopButton.text = "기록 시작"
+            startStopButton.setBackgroundResource(R.drawable.btn_primary)
+        }
     }
 
     override fun onStart() {
@@ -339,7 +527,11 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     override fun onResume() { super.onResume(); mapView.onResume() }
     override fun onPause() { super.onPause(); mapView.onPause() }
     override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory() }
-    override fun onDestroy() { super.onDestroy(); mapView.onDestroy() }
+    override fun onDestroy() {
+        super.onDestroy()
+        mapView.onDestroy()
+        searchHandler.removeCallbacksAndMessages(null)
+    }
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         mapView.onSaveInstanceState(outState)

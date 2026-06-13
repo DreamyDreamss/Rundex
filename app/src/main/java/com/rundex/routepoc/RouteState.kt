@@ -30,6 +30,12 @@ class RouteState {
 
     fun totalDistanceMeters(): Double = _legs.sumOf { it.distanceMeters }
 
+    /** 모든 경유점과 구간을 비운다 (초기화) */
+    fun reset() {
+        _waypoints.clear()
+        _legs.clear()
+    }
+
     /** 모든 구간 좌표를 이어 붙인 전체 경로 (지도 LineString용) */
     fun fullPath(): List<LatLngPoint> = _legs.flatMap { it.points }
 }
