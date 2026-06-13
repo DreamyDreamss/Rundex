@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import org.maplibre.android.MapLibre
 import org.maplibre.android.camera.CameraUpdateFactory
@@ -94,9 +95,13 @@ class TrackViewActivity : Activity() {
         val repTitle = repId?.let { id -> Titles.all.firstOrNull { it.id == id }?.name }
         val discovered = DexStore(dataDir).discoveredCount()
 
-        val bmp = ShareCardRenderer.render(track, repTitle, discovered)
+        // 스토리 카드(그라데이션 배경 + 경로/수치/배지). 합성은 가벼워 동기 렌더.
+        shareBitmap(ShareCardRenderer.render(track, repTitle, discovered), track.id)
+    }
+
+    private fun shareBitmap(bmp: android.graphics.Bitmap, id: String) {
         val dir = File(cacheDir, "share").apply { mkdirs() }
-        val f = File(dir, "card-${track.id}.png")
+        val f = File(dir, "card-$id.png")
         f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         val uri = FileProvider.getUriForFile(this, "com.rundex.routepoc.fileprovider", f)
         startActivity(
