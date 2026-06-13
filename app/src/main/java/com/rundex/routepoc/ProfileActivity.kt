@@ -87,6 +87,11 @@ class ProfileActivity : Activity() {
                 getSharedPreferences("profile", MODE_PRIVATE).edit()
                     .putString("name", name).apply()
                 refresh()
+                // 친구 검색에 노출되도록 서버 프로필 이름도 동기화 (best-effort)
+                val session = Session(this)
+                session.userId?.let { uid ->
+                    ApiClient(session).patchMe(uid, org.json.JSONObject().put("display_name", name))
+                }
             }
             .setNegativeButton("취소", null)
             .show()

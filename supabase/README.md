@@ -23,7 +23,9 @@ BASE_URL = "https://<project-ref>.supabase.co"
 ANON_KEY = "<anon key>"
 ```
 
-- 익명 로그인: `POST {BASE_URL}/auth/v1/signup` (또는 anonymous) → `access_token`을 `Session.token`에 저장
+- 익명 로그인: **앱이 자동 처리**(`RundexApp` 시작 시 `AuthClient.ensureSession()`).
+  첫 실행에 `POST /auth/v1/signup`으로 익명 계정 발급, 이후 `refresh_token`으로 같은 계정 유지.
+  → 대시보드에서 **Anonymous sign-ins 켜기 + ApiConfig 채우기**만 하면 됨(가입 화면 불필요)
 - 런 업로드: `POST {BASE_URL}/rest/v1/rpc/submit_run`  body `{ "payload": { ... } }`
   헤더 `apikey: <anon>`, `Authorization: Bearer <access_token>`
 - 도감/테마/칭호/추천경로/피드: PostgREST 자동 API

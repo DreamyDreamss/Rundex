@@ -18,4 +18,8 @@ class Session(context: Context) {
     var token: String?
         get() = prefs.getString("token", null)
         set(v) { prefs.edit().putString("token", v).apply() }
+
+    var refreshToken: String?
+        get() = prefs.getString("refreshToken", null)
+        set(v) { prefs.edit().putString("refreshToken", v).apply() }
 }
