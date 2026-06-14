@@ -126,6 +126,30 @@ class FeedActivity : Activity() {
     override fun onResume() {
         super.onResume()
         load()
+        refreshNotifBadge()
+    }
+
+    private val isoFmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+
+    /** 안읽음 알림 뱃지 — 마지막 확인 이후 새 알림이 있으면 빨간 점 */
+    private fun refreshNotifBadge() {
+        if (!ApiConfig.enabled || Session(this).userId == null) return
+        val lastSeen = getSharedPreferences("profile", MODE_PRIVATE).getLong("notif_last_seen", 0L)
+        ApiClient(Session(this)).getNotifications { r ->
+            runOnUiThread {
+                r.onSuccess { arr ->
+                    var unread = 0
+                    for (i in 0 until arr.length()) {
+                        val at = arr.getJSONObject(i).optString("at")
+                        val t = runCatching { isoFmt.parse(at.take(19))?.time }.getOrNull() ?: 0L
+                        if (t > lastSeen) unread++
+                    }
+                    findViewById<View>(R.id.notifBadge).visibility =
+                        if (unread > 0) View.VISIBLE else View.GONE
+                }
+            }
+        }
     }
 
     private fun load() {
@@ -165,6 +189,10 @@ class FeedActivity : Activity() {
             android.widget.Toast.makeText(this, "서버 연결 전입니다", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
+        // 열람 시 모두 읽음 처리 — 뱃지 즉시 해제
+        getSharedPreferences("profile", MODE_PRIVATE).edit()
+            .putLong("notif_last_seen", System.currentTimeMillis()).apply()
+        findViewById<View>(R.id.notifBadge).visibility = View.GONE
         ApiClient(Session(this)).getNotifications { r ->
             runOnUiThread {
                 r.onSuccess { arr -> renderNotifications(arr) }
