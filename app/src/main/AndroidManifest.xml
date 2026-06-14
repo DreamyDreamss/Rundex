@@ -61,6 +61,10 @@
             android:label="설정"
             android:exported="false" />
         <activity
+            android:name=".UserListActivity"
+            android:label="목록"
+            android:exported="false" />
+        <activity
             android:name=".DexActivity"
             android:label="도감"
             android:exported="false" />

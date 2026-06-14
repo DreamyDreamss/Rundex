@@ -4,17 +4,23 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
+import android.view.Gravity
+import android.view.View
 import android.widget.EditText
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
 
-/** 프로필 — 이름·대표 칭호·통계 2×2 + 칭호 보관함·러닝 기록 진입 */
+/** 프로필 — Threads형: 게시물/팔로워/팔로잉 + 소개 + 러닝 기록 그리드. 메뉴는 ☰. */
 class ProfileActivity : Activity() {
+
+    private val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+    private val dateFmt = SimpleDateFormat("M/d", Locale.KOREA)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -22,41 +28,27 @@ class ProfileActivity : Activity() {
         NavBar.setup(this, R.id.navProfile)
 
         findViewById<TextView>(R.id.profileName).setOnClickListener { editName() }
+        findViewById<TextView>(R.id.editProfileButton).setOnClickListener { editName() }
         findViewById<TextView>(R.id.profileTitle).setOnClickListener { chooseRepresentativeTitle() }
-        findViewById<Button>(R.id.openTitlesButton).setOnClickListener {
-            startActivity(Intent(this, TitleActivity::class.java))
-        }
-        findViewById<Button>(R.id.openRunsButton).setOnClickListener {
-            startActivity(Intent(this, RunHistoryActivity::class.java))
-        }
-        findViewById<Button>(R.id.openDiscoverButton).setOnClickListener {
-            startActivity(Intent(this, BookmarksActivity::class.java))
-        }
-        findViewById<Button>(R.id.openFeedButton).setOnClickListener {
-            startActivity(Intent(this, FeedActivity::class.java))
-        }
-        findViewById<Button>(R.id.openUsersButton).setOnClickListener {
-            startActivity(Intent(this, UsersActivity::class.java))
-        }
-        findViewById<Button>(R.id.openCrewButton).setOnClickListener {
-            startActivity(Intent(this, CrewActivity::class.java))
-        }
-        findViewById<Button>(R.id.openSettingsButton).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
-        }
+        findViewById<TextView>(R.id.menuButton).setOnClickListener { showMenu() }
+        findViewById<View>(R.id.statFollowers).setOnClickListener { openFollowList("followers") }
+        findViewById<View>(R.id.statFollowing).setOnClickListener { openFollowList("following") }
     }
 
     override fun onResume() {
         super.onResume()
         refresh()
+        loadPosts()
     }
 
     private fun refresh() {
         val prefs = getSharedPreferences("profile", MODE_PRIVATE)
         val nameView = findViewById<TextView>(R.id.profileName)
+        val topName = findViewById<TextView>(R.id.profileTopName)
         val localName = prefs.getString("name", null)
         nameView.text = localName ?: "러너"
-        // 서버 프로필에서 닉네임(최초)·핸들 동기화
+        topName.text = localName ?: "러너"
+
         val sessionP = Session(this)
         if (ApiConfig.enabled) sessionP.userId?.let { uid ->
             ApiClient(sessionP).getProfile(uid) { r ->
@@ -68,13 +60,13 @@ class ProfileActivity : Activity() {
                     runOnUiThread {
                         if (localName == null && name.isNotBlank() && name != "null") {
                             prefs.edit().putString("name", name).apply()
-                            nameView.text = name
+                            nameView.text = name; topName.text = name
                         }
                         findViewById<TextView>(R.id.profileHandle).text =
                             if (handle.isNotBlank() && handle != "null") "@$handle" else "@아이디 설정하기"
                         findViewById<TextView>(R.id.profileBio).apply {
-                            if (bio.isNotBlank() && bio != "null") { text = bio; visibility = android.view.View.VISIBLE }
-                            else visibility = android.view.View.GONE
+                            if (bio.isNotBlank() && bio != "null") { text = bio; visibility = View.VISIBLE }
+                            else visibility = View.GONE
                         }
                     }
                 }
@@ -87,23 +79,19 @@ class ProfileActivity : Activity() {
         val runs = TrackStore(File(filesDir, "tracks")).list()
         val index = RegionRepo.get(this)
 
-        // 대표 칭호 = 사용자가 고른 것, 없으면 가장 최근 획득 (탭하면 변경)
         val repId = prefs.getString("rep_title_id", null)?.takeIf { owned.containsKey(it) }
         val rep = (repId ?: owned.maxByOrNull { it.value }?.key)
             ?.let { id -> Titles.all.firstOrNull { it.id == id } }
         findViewById<TextView>(R.id.profileTitle).text =
             rep?.let { "🏅 ${it.name}  ✎" } ?: "칭호를 선택하세요"
 
-        // 우선 로컬 값으로 즉시 표시 (오프라인/초기), 이후 서버 통계로 덮어쓴다
         val total = index?.totalCount ?: 3482
         val totalKm = runs.sumOf { it.distanceMeters } / 1000.0
-        findViewById<TextView>(R.id.statDistance).text =
-            "총 거리\n${String.format(Locale.US, "%.1f", totalKm)} km"
+        findViewById<TextView>(R.id.statDistance).text = "총 거리\n${String.format(Locale.US, "%.1f", totalKm)} km"
         findViewById<TextView>(R.id.statRuns).text = "러닝\n${runs.size}회"
         findViewById<TextView>(R.id.statDex).text = "발견 동\n${dex.discoveredCount()} / $total"
         findViewById<TextView>(R.id.statTitles).text = "칭호\n${owned.size} / ${Titles.all.size}"
 
-        // 서버 원천 통계로 동기화 (프로필 ↔ 도감/기록 수치 일치)
         val session = Session(this)
         if (ApiConfig.enabled && session.userId != null) {
             ApiClient(session).getMyStats { r ->
@@ -113,24 +101,134 @@ class ProfileActivity : Activity() {
                             "총 거리\n${String.format(Locale.US, "%.1f", o.optDouble("totalM") / 1000.0)} km"
                         findViewById<TextView>(R.id.statRuns).text = "러닝\n${o.optInt("runs")}회"
                         findViewById<TextView>(R.id.statDex).text = "발견 동\n${o.optInt("dex")} / $total"
-                        findViewById<TextView>(R.id.statTitles).text =
-                            "칭호\n${o.optInt("titles")} / ${Titles.all.size}"
-                        findViewById<TextView>(R.id.weekDistance).text =
-                            "${String.format(Locale.US, "%.1f", o.optDouble("weekM") / 1000.0)} km"
-                        findViewById<TextView>(R.id.weekRuns).text = "${o.optInt("weekRuns")}회"
-                        findViewById<TextView>(R.id.statFollow).text =
-                            "${o.optInt("followers")} · ${o.optInt("following")}"
+                        findViewById<TextView>(R.id.statTitles).text = "칭호\n${o.optInt("titles")} / ${Titles.all.size}"
+                        findViewById<TextView>(R.id.postsCount).text = "${o.optInt("runs")}"
+                        findViewById<TextView>(R.id.followersCount).text = "${o.optInt("followers")}"
+                        findViewById<TextView>(R.id.followingCount).text = "${o.optInt("following")}"
                         val streak = o.optInt("streak")
                         findViewById<TextView>(R.id.streakBanner).apply {
-                            if (streak > 0) {
-                                text = "🔥 ${streak}일 연속 러닝 중!"
-                                visibility = android.view.View.VISIBLE
-                            } else visibility = android.view.View.GONE
+                            if (streak > 0) { text = "🔥 ${streak}일 연속 러닝 중!"; visibility = View.VISIBLE }
+                            else visibility = View.GONE
                         }
                     }
                 }
             }
         }
+    }
+
+    private fun openFollowList(kind: String) {
+        val uid = Session(this).userId ?: return
+        startActivity(Intent(this, UserListActivity::class.java)
+            .putExtra("userId", uid).putExtra("kind", kind))
+    }
+
+    // ── 게시물(러닝 기록) 그리드 ─────────────────────────────
+    private fun loadPosts() {
+        val uid = Session(this).userId
+        if (!ApiConfig.enabled || uid == null) return
+        ApiClient(Session(this)).listMyRuns(uid) { r ->
+            runOnUiThread { r.onSuccess { renderPosts(it) } }
+        }
+    }
+
+    private fun renderPosts(arr: JSONArray) {
+        val grid = findViewById<LinearLayout>(R.id.postsGrid)
+        grid.removeAllViews()
+        findViewById<TextView>(R.id.postsEmpty).visibility = if (arr.length() == 0) View.VISIBLE else View.GONE
+        var row: LinearLayout? = null
+        for (i in 0 until arr.length()) {
+            if (i % 2 == 0) {
+                row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+                grid.addView(row)
+            }
+            val cell = layoutInflater.inflate(R.layout.cell_post, row, false)
+            bindPost(cell, arr.getJSONObject(i))
+            row!!.addView(cell)
+        }
+        if (arr.length() % 2 == 1) {  // 홀수면 빈 칸으로 정렬 유지
+            row?.addView(View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+            })
+        }
+    }
+
+    private fun bindPost(cell: View, o: JSONObject) {
+        val started = runCatching { iso.parse(o.optString("started_at").take(19)) }.getOrNull()
+        cell.findViewById<TextView>(R.id.postDistance).text =
+            String.format(Locale.US, "%.2f km", o.optDouble("distance_m") / 1000.0)
+        cell.findViewById<TextView>(R.id.postDate).text = started?.let { dateFmt.format(it) } ?: ""
+        cell.findViewById<TextView>(R.id.postBadge).text =
+            if (o.optString("visibility", "private") == "public") "공개" else "비공개"
+        cell.findViewById<RoutePreviewView>(R.id.postRoute).setRoute(parseRoute(o.optJSONObject("geom")))
+        cell.setOnClickListener { openRunDetail(o) }
+    }
+
+    private fun parseRoute(geom: JSONObject?): List<DoubleArray> {
+        val coords = geom?.optJSONArray("coordinates") ?: return emptyList()
+        return runCatching {
+            (0 until coords.length()).map {
+                val c = coords.getJSONArray(it); doubleArrayOf(c.getDouble(0), c.getDouble(1))
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private fun openRunDetail(o: JSONObject) {
+        val geom = o.optJSONObject("geom") ?: run {
+            Toast.makeText(this, "이 기록엔 경로 데이터가 없어요", Toast.LENGTH_SHORT).show(); return
+        }
+        val tagsArr = o.optJSONArray("tags")
+        val tags = if (tagsArr == null || tagsArr.length() == 0) ""
+            else (0 until tagsArr.length()).joinToString(" ") { "#" + tagsArr.optString(it) }
+        startActivity(
+            Intent(this, TrackViewActivity::class.java)
+                .putExtra("serverGeoJson", geom.toString())
+                .putExtra("distanceM", o.optDouble("distance_m"))
+                .putExtra("durationMs", o.optLong("duration_ms"))
+                .putExtra("caption", o.optString("caption").takeIf { it != "null" } ?: "")
+                .putExtra("tags", tags)
+                .putExtra("visibility", o.optString("visibility", "private"))
+                .putExtra("startedAtIso", o.optString("started_at"))
+        )
+    }
+
+    // ── ☰ 메뉴 (바텀시트) ─────────────────────────────────
+    private fun showMenu() {
+        val dp = resources.displayMetrics.density
+        fun px(v: Int) = (v * dp).toInt()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundResource(R.drawable.dialog_bg)
+            setPadding(px(10), px(14), px(10), px(18))
+        }
+        box.addView(TextView(this).apply {
+            text = "메뉴"; textSize = 16f; setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTextColor(getColor(R.color.textDark)); setPadding(px(14), 0, 0, px(8))
+        })
+        val dialog = android.app.Dialog(this, R.style.RundexDialog)
+        val entries = listOf(
+            Triple("🏅", "칭호 보관함", TitleActivity::class.java),
+            Triple("📜", "러닝 기록", RunHistoryActivity::class.java),
+            Triple("🔖", "코스 보관함", BookmarksActivity::class.java),
+            Triple("📣", "피드", FeedActivity::class.java),
+            Triple("👥", "친구 찾기", UsersActivity::class.java),
+            Triple("🤝", "크루", CrewActivity::class.java),
+            Triple("⚙️", "설정", SettingsActivity::class.java),
+        )
+        for ((emoji, label, cls) in entries) {
+            box.addView(TextView(this).apply {
+                text = "$emoji   $label"; textSize = 15f
+                setTextColor(getColor(R.color.textDark))
+                setPadding(px(14), px(14), px(14), px(14))
+                setOnClickListener { dialog.dismiss(); startActivity(Intent(this@ProfileActivity, cls)) }
+            })
+        }
+        dialog.setContentView(box)
+        dialog.window?.apply {
+            setBackgroundDrawableResource(android.R.color.transparent)
+            setGravity(Gravity.BOTTOM)
+            setLayout(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        dialog.show()
     }
 
     private fun editName() {
@@ -142,7 +240,6 @@ class ProfileActivity : Activity() {
         input.setSelection(input.text.length)
 
         val session = Session(this)
-        // 현재 핸들·소개 채워넣기
         session.userId?.let { uid ->
             ApiClient(session).getProfile(uid) { r ->
                 r.onSuccess { arr ->
@@ -164,13 +261,12 @@ class ProfileActivity : Activity() {
         view.findViewById<TextView>(R.id.btnCancel).setOnClickListener { dialog.dismiss() }
         view.findViewById<TextView>(R.id.btnSave).setOnClickListener {
             val name = input.text.toString().trim().ifEmpty { "러너" }
-            // 핸들 정제: 소문자 영문·숫자·_, 3~20자
             val handle = handleInput.text.toString().trim().lowercase().replace(Regex("[^a-z0-9_]"), "")
             val bio = bioInput.text.toString().trim().take(80)
             getSharedPreferences("profile", MODE_PRIVATE).edit().putString("name", name).apply()
             refresh()
             session.userId?.let { uid ->
-                val body = org.json.JSONObject().put("display_name", name).put("bio", bio)
+                val body = JSONObject().put("display_name", name).put("bio", bio)
                 if (handle.length in 3..20) body.put("handle", handle)
                 ApiClient(session).patchMe(uid, body) { r ->
                     runOnUiThread {
@@ -186,7 +282,7 @@ class ProfileActivity : Activity() {
         dialog.show()
     }
 
-    /** 보유 칭호 중 프로필 대표로 노출할 칭호를 고른다 (서버엔 best-effort 동기화) */
+    /** 보유 칭호 중 프로필 대표로 노출할 칭호 선택 */
     private fun chooseRepresentativeTitle() {
         val owned = TitleStore(File(filesDir, "data")).owned()
         val items = Titles.all.filter { owned.containsKey(it.id) }
@@ -199,159 +295,14 @@ class ProfileActivity : Activity() {
             .setTitle("대표 칭호 선택")
             .setItems(labels) { _, i ->
                 val id = items[i].id
-                getSharedPreferences("profile", MODE_PRIVATE).edit()
-                    .putString("rep_title_id", id).apply()
+                getSharedPreferences("profile", MODE_PRIVATE).edit().putString("rep_title_id", id).apply()
                 refresh()
-                // 서버가 켜져 있으면 대표 칭호 동기화 (없으면 조용히 스킵)
-                val session = Session(this)
-                session.userId?.let { uid ->
-                    ApiClient(session).patchMe(
-                        uid,
-                        org.json.JSONObject().put("rep_title_ids", org.json.JSONArray(listOf(id)))
-                    )
+                Session(this).userId?.let { uid ->
+                    ApiClient(Session(this)).patchMe(uid,
+                        JSONObject().put("rep_title_ids", JSONArray(listOf(id))))
                 }
             }
             .setNegativeButton("취소", null)
-            .show()
-    }
-
-    /** 북마크한 코스 — 서버에서 불러와 목록 표시(탭하면 삭제) */
-    private fun showBookmarks() {
-        val session = Session(this)
-        val uid = session.userId
-        if (!ApiConfig.enabled || uid == null) {
-            Toast.makeText(this, "서버 연결 후 사용할 수 있어요", Toast.LENGTH_SHORT).show()
-            return
-        }
-        ApiClient(session).listMyBookmarks(uid) { result ->
-            runOnUiThread {
-                result.onSuccess { arr ->
-                    if (arr.length() == 0) {
-                        Toast.makeText(this, "북마크한 코스가 없어요. 러닝 → 추천에서 저장해보세요", Toast.LENGTH_LONG).show()
-                        return@runOnUiThread
-                    }
-                    val ids = ArrayList<String>()
-                    val labels = ArrayList<String>()
-                    for (i in 0 until arr.length()) {
-                        val r = arr.getJSONObject(i).optJSONObject("routes") ?: continue
-                        ids.add(r.optString("id"))
-                        val km = String.format(Locale.US, "%.1f", r.optDouble("distance_m") / 1000.0)
-                        labels.add("🗺 ${r.optString("name")}  ·  ${km}km  ·  ${"★".repeat(r.optInt("difficulty", 1))}")
-                    }
-                    AlertDialog.Builder(this, R.style.RundexDialog)
-                        .setTitle("🔖 북마크한 코스 (탭하면 삭제)")
-                        .setItems(labels.toTypedArray()) { _, i ->
-                            ApiClient(session).removeBookmark(uid, ids[i]) { r ->
-                                runOnUiThread {
-                                    r.onSuccess { Toast.makeText(this, "북마크에서 삭제했어요", Toast.LENGTH_SHORT).show() }
-                                }
-                            }
-                        }
-                        .setPositiveButton("닫기", null)
-                        .show()
-                }.onFailure {
-                    Toast.makeText(this, "북마크를 불러올 수 없어요", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    /** 내 러닝 기록 — 서버(원천)에서 불러와 공개/비공개를 직접 전환(업로드) */
-    private fun showRuns() {
-        val session = Session(this)
-        val uid = session.userId
-        if (!ApiConfig.enabled || uid == null) {
-            showLocalRuns()
-            return
-        }
-        ApiClient(session).listMyRuns(uid) { result ->
-            runOnUiThread {
-                result.onSuccess { arr -> renderRunList(uid, arr) }
-                    .onFailure {
-                        Toast.makeText(this, "서버 기록을 불러올 수 없어 로컬 기록을 표시합니다", Toast.LENGTH_SHORT).show()
-                        showLocalRuns()
-                    }
-            }
-        }
-    }
-
-    private fun renderRunList(uid: String, arr: org.json.JSONArray) {
-        if (arr.length() == 0) {
-            Toast.makeText(this, "서버에 저장된 기록 없음", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-        val fmt = SimpleDateFormat("M/d HH:mm", Locale.KOREA)
-        val runs = (0 until arr.length()).map { arr.getJSONObject(it) }
-        val labels = runs.map { o ->
-            val started = runCatching { iso.parse(o.optString("started_at").take(19)) }.getOrNull()
-            val badge = if (o.optString("visibility", "private") == "public") "🔓 공개" else "🔒 비공개"
-            "${started?.let { fmt.format(it) } ?: "-"} · " +
-                "${TrackActivity.formatKm(o.optDouble("distance_m"))} · " +
-                "${TrackActivity.formatDuration(o.optLong("duration_ms"))}   $badge"
-        }
-        AlertDialog.Builder(this, R.style.RundexDialog)
-            .setTitle("내 러닝 기록 ${runs.size}개")
-            .setItems(labels.toTypedArray()) { _, i -> runActionDialog(runs[i]) }
-            .setPositiveButton("닫기", null)
-            .show()
-    }
-
-    /** 런 1개 액션: 경로 보기 / 공개·비공개 전환 */
-    private fun runActionDialog(o: org.json.JSONObject) {
-        val isPublic = o.optString("visibility", "private") == "public"
-        val toggleLabel = if (isPublic) "🔒 비공개로 전환" else "🔓 피드에 공개"
-        AlertDialog.Builder(this, R.style.RundexDialog)
-            .setItems(arrayOf("🗺 경로 보기", toggleLabel)) { _, which ->
-                if (which == 0) {
-                    val geom = o.optJSONObject("geom")
-                    if (geom == null) {
-                        Toast.makeText(this, "이 기록엔 경로 데이터가 없어요", Toast.LENGTH_SHORT).show()
-                        return@setItems
-                    }
-                    startActivity(
-                        Intent(this, TrackViewActivity::class.java)
-                            .putExtra("serverGeoJson", geom.toString())
-                            .putExtra("distanceM", o.optDouble("distance_m"))
-                            .putExtra("durationMs", o.optLong("duration_ms"))
-                            .putExtra("caption", o.optString("caption").takeIf { it != "null" } ?: "")
-                    )
-                } else {
-                    val next = if (isPublic) "private" else "public"
-                    ApiClient(Session(this)).setRunVisibility(o.optString("id"), next) { r ->
-                        runOnUiThread {
-                            r.onSuccess {
-                                Toast.makeText(this, if (next == "public") "피드에 공개했어요" else "비공개로 전환했어요", Toast.LENGTH_SHORT).show()
-                                showRuns()
-                            }.onFailure { Toast.makeText(this, "전환 실패", Toast.LENGTH_SHORT).show() }
-                        }
-                    }
-                }
-            }
-            .setNegativeButton("닫기", null)
-            .show()
-    }
-
-    private fun showLocalRuns() {
-        val summaries = TrackStore(File(filesDir, "tracks")).list()
-        if (summaries.isEmpty()) {
-            Toast.makeText(this, "저장된 기록 없음", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val fmt = SimpleDateFormat("M/d HH:mm", Locale.KOREA)
-        val labels = summaries.map {
-            "${fmt.format(Date(it.startedAtMs))} · " +
-                "${TrackActivity.formatKm(it.distanceMeters)} · " +
-                TrackActivity.formatDuration(it.durationMs)
-        }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("러닝 기록")
-            .setItems(labels) { _, i ->
-                startActivity(
-                    Intent(this, TrackViewActivity::class.java)
-                        .putExtra("trackId", summaries[i].id)
-                )
-            }
             .show()
     }
 }

@@ -56,6 +56,14 @@ class ApiClient(
     fun getPublicProfile(userId: String, cb: (Result<JSONObject>) -> Unit) =
         postObject("/rest/v1/rpc/public_profile", JSONObject().put("p_user", userId), cb)
 
+    /** 팔로워/팔로잉 목록 — kind: "followers" | "following" */
+    fun followList(userId: String, kind: String, cb: (Result<JSONArray>) -> Unit) {
+        val req = build("/rest/v1/rpc/follow_list")
+            ?.post(JSONObject().put("p_user", userId).put("p_kind", kind).toString().toRequestBody(jsonMedia))
+            ?.build() ?: return cb(skipped())
+        enqueue(req) { raw -> cb(raw.map { JSONArray(it) }) }
+    }
+
     /** 내 알림 — 내 러닝에 좋아요 / 나를 팔로우 (최신순) */
     fun getNotifications(cb: (Result<JSONArray>) -> Unit) {
         val req = build("/rest/v1/rpc/my_notifications")
