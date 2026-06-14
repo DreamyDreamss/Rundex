@@ -113,7 +113,12 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         findViewById<View>(R.id.mapToggleButton).setOnClickListener { setRunMapMode(true) }
         findViewById<View>(R.id.statsToggleButton).setOnClickListener { setRunMapMode(false) }
         findViewById<View>(R.id.loadRouteButton).setOnClickListener { loadSavedRoute() }
-        findViewById<View>(R.id.historyButton).setOnClickListener { showHistory() }
+        findViewById<View>(R.id.historyButton).setOnClickListener {
+            // 서버(원천) 기록으로 통일 — 로컬 이 기기 기록만 보이던 문제 해결
+            if (ApiConfig.enabled && Session(this).userId != null)
+                startActivity(Intent(this, RunHistoryActivity::class.java))
+            else showHistory()
+        }
         loadRecommendedCards()
         maybeOfferRecovery()
 
@@ -154,17 +159,36 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                     )
                 )
                 redrawTrack()
-                plannedRoute?.let { plan ->
+                val plan = plannedRoute
+                if (plan != null) {
                     planSource?.setGeoJson(
                         LineString.fromLngLats(plan.points.map { Point.fromLngLat(it.lon, it.lat) })
                     )
                     m.cameraPosition = CameraPosition.Builder()
                         .target(LatLng(plan.points.first().lat, plan.points.first().lon))
                         .zoom(15.0).build()
+                } else {
+                    centerOnMyLocation()   // 계획 경로 없으면 내 위치를 지도 중앙에
                 }
             }
         }
         setState()
+    }
+
+    /** 대기 화면에서 내 현재 위치를 지도 중앙에 포커스 + 위치 점 표시 */
+    private fun centerOnMyLocation() {
+        if (!hasPermissions()) return
+        runCatching {
+            com.google.android.gms.location.LocationServices
+                .getFusedLocationProviderClient(this).lastLocation
+                .addOnSuccessListener { loc ->
+                    if (loc == null || TrackRecorder.recording) return@addOnSuccessListener
+                    meSource?.setGeoJson(Point.fromLngLat(loc.longitude, loc.latitude))
+                    map?.animateCamera(
+                        CameraUpdateFactory.newLatLngZoom(LatLng(loc.latitude, loc.longitude), 15.5)
+                    )
+                }
+        }
     }
 
     /** 시작 버튼 → 권한 확인 후 3·2·1 카운트다운 → 기록 시작 */

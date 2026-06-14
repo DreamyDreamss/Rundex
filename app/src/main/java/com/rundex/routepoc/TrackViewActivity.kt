@@ -68,6 +68,11 @@ class TrackViewActivity : Activity() {
                     startActivity(Intent(this@TrackViewActivity, TrackActivity::class.java).putExtra("follow", true))
                 }
             }
+            // 🔖 코스 보관함에 저장 — 이 경로를 내 코스(비공개)로 만들고 북마크
+            findViewById<Button>(R.id.bookmarkCourseButton).apply {
+                visibility = android.view.View.VISIBLE
+                setOnClickListener { bookmarkCourse(pts) }
+            }
         } else {
             val track = TrackStore(File(filesDir, "tracks")).load(intent.getStringExtra("trackId")!!)
             pts = track.points.map { doubleArrayOf(it.lon, it.lat) }
@@ -168,6 +173,37 @@ class TrackViewActivity : Activity() {
     private fun isoToLabel(iso: String): String? =
         runCatching { isoFmt.parse(iso.take(19))?.let { labelFmt.format(it) } }.getOrNull()
     private fun msToLabel(ms: Long): String = labelFmt.format(java.util.Date(ms))
+
+    /** 피드/타인의 경로를 내 코스(비공개)로 만들어 코스 보관함에 북마크 */
+    private fun bookmarkCourse(pts: List<DoubleArray>) {
+        val session = Session(this)
+        val uid = session.userId
+        if (!ApiConfig.enabled || uid == null) {
+            Toast.makeText(this, "서버 연결 후 사용할 수 있어요", Toast.LENGTH_SHORT).show(); return
+        }
+        if (pts.size < 2) { Toast.makeText(this, "경로가 없어요", Toast.LENGTH_SHORT).show(); return }
+        val dist = intent.getDoubleExtra("distanceM", 0.0)
+        val km = String.format(Locale.US, "%.1f", dist / 1000.0)
+        val cap = intent.getStringExtra("caption").orEmpty().takeIf { it.isNotBlank() }
+        val name = cap ?: "저장한 코스 ${km}km"
+        val ewkt = "SRID=4326;LINESTRING(" + pts.joinToString(", ") { "${it[0]} ${it[1]}" } + ")"
+        val body = org.json.JSONObject()
+            .put("name", name).put("distance_m", dist)
+            .put("difficulty", 2).put("geom", ewkt).put("is_public", false)
+        val api = ApiClient(session)
+        api.createRoute(body) { r ->
+            r.onSuccess { route ->
+                val rid = route.optString("id")
+                api.addBookmark(uid, rid) {
+                    runOnUiThread {
+                        Toast.makeText(this, "코스 보관함에 저장했어요 🔖", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.onFailure {
+                runOnUiThread { Toast.makeText(this, "저장 실패", Toast.LENGTH_SHORT).show() }
+            }
+        }
+    }
 
     private fun parseLonLat(geojson: String): List<DoubleArray> = runCatching {
         val coords = org.json.JSONObject(geojson).getJSONArray("coordinates")

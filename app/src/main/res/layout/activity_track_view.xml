@@ -297,11 +297,26 @@
 
                 <Button
                     android:id="@+id/followCourseButton"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
                     android:layout_height="52dp"
                     android:background="@drawable/btn_primary"
-                    android:text="🏃 이 코스 따라 뛰기"
+                    android:text="🏃 따라 뛰기"
                     android:textColor="#FFFFFF"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+
+                <Button
+                    android:id="@+id/bookmarkCourseButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="52dp"
+                    android:layout_marginStart="10dp"
+                    android:background="@drawable/btn_secondary"
+                    android:paddingStart="22dp"
+                    android:paddingEnd="22dp"
+                    android:text="🔖 저장"
+                    android:textColor="@color/textDark"
                     android:textSize="15sp"
                     android:textStyle="bold"
                     android:visibility="gone" />
