@@ -30,13 +30,40 @@ class UsersActivity : Activity() {
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { search(v.text.toString().trim()); true } else false
         }
 
-        // 내 팔로잉 미리 로드
+        // 내 팔로잉 미리 로드 → 이후 추천 러너 표시
         Session(this).userId?.let { me ->
             if (ApiConfig.enabled) ApiClient(Session(this)).listFollowing(me) { r ->
                 r.onSuccess { arr ->
                     runOnUiThread {
                         following.clear()
                         for (i in 0 until arr.length()) following.add(arr.getJSONObject(i).optString("followee_id"))
+                        loadSuggested()
+                    }
+                }.onFailure { runOnUiThread { loadSuggested() } }
+            }
+        }
+    }
+
+    /** 검색 전 기본 화면 — 추천 러너 노출 */
+    private fun loadSuggested() {
+        if (!ApiConfig.enabled) return
+        val me = Session(this).userId
+        ApiClient(Session(this)).suggestedUsers { r ->
+            runOnUiThread {
+                r.onSuccess { arr ->
+                    ids.clear(); names.clear(); handles.clear()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        if (o.optString("id") == me) continue
+                        ids.add(o.optString("id"))
+                        names.add(o.optString("display_name").ifEmpty { "러너" })
+                        val h = o.optString("handle").takeIf { it.isNotBlank() && it != "null" }
+                        handles.add((h?.let { "@$it · " } ?: "") + "러닝 ${o.optInt("runs")} · 팔로워 ${o.optInt("followers")}")
+                    }
+                    render()
+                    if (ids.isEmpty()) {
+                        rows.add(SocialRow("✨", "추천할 러너가 아직 없어요", "이름·@아이디로 검색해보세요"))
+                        adapter.notifyDataSetChanged()
                     }
                 }
             }
@@ -56,7 +83,7 @@ class UsersActivity : Activity() {
                         if (o.optString("id") == me) continue   // 본인 제외
                         ids.add(o.optString("id"))
                         names.add(o.optString("display_name").ifEmpty { "러너" })
-                        handles.add(o.optString("handle").takeIf { it.isNotEmpty() })
+                        handles.add(o.optString("handle").takeIf { it.isNotEmpty() }?.let { "@$it" })
                     }
                     render()
                     if (ids.isEmpty()) {
@@ -72,8 +99,7 @@ class UsersActivity : Activity() {
         rows.clear()
         for (i in ids.indices) {
             val on = following.contains(ids[i])
-            val handle = handles[i]?.let { "@$it" }
-            rows.add(SocialRow(names[i].first().toString(), names[i], handle, if (on) "팔로잉 ✓" else "＋ 팔로우"))
+            rows.add(SocialRow(names[i].first().toString(), names[i], handles[i], if (on) "팔로잉 ✓" else "＋ 팔로우"))
         }
         adapter.notifyDataSetChanged()
     }

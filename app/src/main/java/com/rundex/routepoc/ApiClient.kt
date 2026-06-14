@@ -60,6 +60,13 @@ class ApiClient(
     fun getPublicProfile(userId: String, cb: (Result<JSONObject>) -> Unit) =
         postObject("/rest/v1/rpc/public_profile", JSONObject().put("p_user", userId), cb)
 
+    /** 추천 러너 — 내가 팔로우 안 한 활동 유저(팔로워·공개러닝순) */
+    fun suggestedUsers(cb: (Result<JSONArray>) -> Unit) {
+        val req = build("/rest/v1/rpc/suggested_users")
+            ?.post("{}".toRequestBody(jsonMedia))?.build() ?: return cb(skipped())
+        enqueue(req) { raw -> cb(raw.map { JSONArray(it) }) }
+    }
+
     /** 팔로워/팔로잉 목록 — kind: "followers" | "following" */
     fun followList(userId: String, kind: String, cb: (Result<JSONArray>) -> Unit) {
         val req = build("/rest/v1/rpc/follow_list")
