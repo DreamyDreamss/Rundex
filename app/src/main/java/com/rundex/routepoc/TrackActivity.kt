@@ -341,6 +341,15 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             .show()
     }
 
+    /** 목표 달성 여부 → 결과화면 축하 라인 (목표 없거나 미달이면 null) */
+    private fun goalAchievedLine(track: SavedTrack): String? = when (goalType()) {
+        "dist" -> if (track.distanceMeters >= goalValue())
+            "🎯 목표 달성! ${String.format(Locale.US, "%.1f", goalValue() / 1000.0)}km 완주" else null
+        "time" -> if (track.durationMs >= goalValue())
+            "🎯 목표 달성! ${(goalValue() / 60000).toInt()}분 러닝" else null
+        else -> null
+    }
+
     /** 인런 화면 목표 진행도 갱신 */
     private fun refreshGoal(distM: Double, elapsedMs: Long) {
         val box = findViewById<View>(R.id.goalProgress)
@@ -490,12 +499,17 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     }
 
     /** 러닝 완료 축하 화면 — 거리/시간/페이스/칼로리 + 성취 목록 */
-    private fun showRunResult(track: SavedTrack, achievements: List<String>) {
+    private fun showRunResult(track: SavedTrack, serverAch: List<String>) {
         val view = layoutInflater.inflate(R.layout.dialog_result, null)
         view.findViewById<TextView>(R.id.resDistance).text = formatKm(track.distanceMeters)
         view.findViewById<TextView>(R.id.resTime).text = formatDuration(track.durationMs)
         view.findViewById<TextView>(R.id.resPace).text = formatPace(track.distanceMeters, track.durationMs)
         view.findViewById<TextView>(R.id.resKcal).text = "${RunStats.calorieKcal(track.distanceMeters).toInt()}"
+
+        // 목표 달성 시 맨 위에 축하 한 줄
+        val achievements = ArrayList<String>()
+        goalAchievedLine(track)?.let { achievements.add(it) }
+        achievements.addAll(serverAch)
 
         val box = view.findViewById<android.widget.LinearLayout>(R.id.resAchievements)
         val pad = (12 * resources.displayMetrics.density).toInt()

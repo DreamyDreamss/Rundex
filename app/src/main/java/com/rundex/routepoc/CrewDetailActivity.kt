@@ -104,10 +104,20 @@ class CrewDetailActivity : Activity() {
                     } else {
                         val prog = o.optDouble("progressM") / 1000.0
                         val target = o.optDouble("targetM") / 1000.0
+                        val pct = if (target > 0) prog / target else 0.0
+                        val remain = (target - prog).coerceAtLeast(0.0)
                         title.text = "🏁 ${o.optString("title")}"
+                        val cheer = when {
+                            pct >= 1.0 -> "🎉 목표 달성! 다음 챌린지를 만들어보세요"
+                            pct >= 0.5 -> "🔥 거의 다 왔어요 · 남은 ${String.format(Locale.US, "%.1f", remain)}km"
+                            else -> "💪 함께 달려요 · 남은 ${String.format(Locale.US, "%.1f", remain)}km"
+                        }
                         text.text = "${String.format(Locale.US, "%.1f", prog)} / ${String.format(Locale.US, "%.0f", target)} km" +
-                            (o.optString("periodEnd").takeIf { it.isNotBlank() && it != "null" }?.let { " · ~$it" } ?: "")
+                            (o.optString("periodEnd").takeIf { it.isNotBlank() && it != "null" }?.let { " · ~$it" } ?: "") +
+                            "\n$cheer"
                         bar.progress = if (target > 0) (prog / target * 1000).toInt().coerceIn(0, 1000) else 0
+                        bar.progressTintList = android.content.res.ColorStateList.valueOf(
+                            getColor(if (pct >= 1.0) R.color.success else R.color.primary))
                         renderContributors(board, o.optJSONArray("contributors"))
                     }
                 }
