@@ -29,7 +29,9 @@ class ProfileActivity : Activity() {
         findViewById<Button>(R.id.openRunsButton).setOnClickListener {
             startActivity(Intent(this, RunHistoryActivity::class.java))
         }
-        findViewById<Button>(R.id.openDiscoverButton).setOnClickListener { showBookmarks() }
+        findViewById<Button>(R.id.openDiscoverButton).setOnClickListener {
+            startActivity(Intent(this, BookmarksActivity::class.java))
+        }
         findViewById<Button>(R.id.openFeedButton).setOnClickListener {
             startActivity(Intent(this, FeedActivity::class.java))
         }

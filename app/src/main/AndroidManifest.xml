@@ -53,6 +53,10 @@
             android:label="프로필"
             android:exported="false" />
         <activity
+            android:name=".BookmarksActivity"
+            android:label="코스 보관함"
+            android:exported="false" />
+        <activity
             android:name=".DexActivity"
             android:label="도감"
             android:exported="false" />

@@ -94,7 +94,7 @@ class ApiClient(
     fun listMyBookmarks(userId: String, cb: (Result<JSONArray>) -> Unit) =
         getArray(
             "/rest/v1/route_bookmarks?user_id=eq.$userId" +
-                "&select=route_id,routes(id,name,distance_m,difficulty)&order=created_at.desc", cb
+                "&select=route_id,routes(id,name,distance_m,difficulty,geom)&order=created_at.desc", cb
         )
 
     // 소셜
