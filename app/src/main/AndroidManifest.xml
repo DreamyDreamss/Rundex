@@ -12,17 +12,26 @@
 
     <application
         android:name=".RundexApp"
-        android:label="러닝도감"
+        android:label="Rundex"
         android:theme="@style/AppTheme">
         <activity
-            android:name=".TrackActivity"
-            android:label="러닝도감"
+            android:name=".SplashActivity"
+            android:label="Rundex"
+            android:theme="@style/AppTheme"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".FeedActivity"
+            android:label="Rundex"
+            android:exported="false" />
+        <activity
+            android:name=".TrackActivity"
+            android:label="러닝"
+            android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:label="경로 만들기"
@@ -52,15 +61,15 @@
             android:label="추천 코스"
             android:exported="false" />
         <activity
-            android:name=".FeedActivity"
-            android:label="피드"
-            android:exported="false" />
-        <activity
             android:name=".UsersActivity"
             android:label="친구 찾기"
             android:exported="false" />
         <activity
             android:name=".CrewActivity"
+            android:label="크루"
+            android:exported="false" />
+        <activity
+            android:name=".CrewDetailActivity"
             android:label="크루"
             android:exported="false" />
         <provider

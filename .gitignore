@@ -6,3 +6,9 @@ local.properties
 .kotlin/
 # 사내망 SSL 프록시 대응(로컬 전용)
 app/src/debug/
+
+# Obsidian 노트 에디터 설정
+docs/.obsidian/
+
+# 개발 중 캡처 스크린샷
+captures/

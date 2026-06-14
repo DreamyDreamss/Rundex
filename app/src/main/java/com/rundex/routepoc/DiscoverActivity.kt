@@ -13,14 +13,18 @@ import java.util.Locale
 class DiscoverActivity : Activity() {
 
     private val rows = ArrayList<SocialRow>()
+    private val routeObjs = ArrayList<org.json.JSONObject?>()
     private lateinit var adapter: SocialRowAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_discover)
+        NavBar.setup(this, R.id.navRun)
 
         adapter = SocialRowAdapter(this, rows)
-        findViewById<ListView>(R.id.discoverList).adapter = adapter
+        val list = findViewById<ListView>(R.id.discoverList)
+        list.adapter = adapter
+        list.setOnItemClickListener { _, _, pos, _ -> onRouteTap(pos) }
         findViewById<Button>(R.id.registerRouteButton).setOnClickListener { registerMyRoute() }
 
         if (!ApiConfig.enabled) {
@@ -33,18 +37,22 @@ class DiscoverActivity : Activity() {
         ApiClient(Session(this)).listRoutes("is_public=eq.true&order=created_at.desc&limit=50") { result ->
             result.onSuccess { arr ->
                 runOnUiThread {
-                    rows.clear()
+                    rows.clear(); routeObjs.clear()
                     for (i in 0 until arr.length()) {
                         val o = arr.getJSONObject(i)
                         val km = String.format(Locale.US, "%.1f", o.optDouble("distance_m") / 1000.0)
                         rows.add(
                             SocialRow(
                                 "🗺", o.optString("name"),
-                                "${km}km · 난이도 ${"★".repeat(o.optInt("difficulty", 1))}", "›"
+                                "${km}km · 난이도 ${"★".repeat(o.optInt("difficulty", 1))}", "🔖"
                             )
                         )
+                        routeObjs.add(o)
                     }
-                    if (rows.isEmpty()) rows.add(SocialRow("🧭", "아직 등록된 추천 코스가 없습니다", "첫 코스를 등록해보세요!"))
+                    if (rows.isEmpty()) {
+                        rows.add(SocialRow("🧭", "아직 등록된 추천 코스가 없습니다", "첫 코스를 등록해보세요!"))
+                        routeObjs.add(null)
+                    }
                     adapter.notifyDataSetChanged()
                 }
             }.onFailure {
@@ -55,6 +63,26 @@ class DiscoverActivity : Activity() {
                 }
             }
         }
+    }
+
+    /** 코스 탭 → 북마크 저장 */
+    private fun onRouteTap(pos: Int) {
+        val o = routeObjs.getOrNull(pos) ?: return
+        val session = Session(this)
+        val uid = session.userId ?: return
+        val routeId = o.optString("id")
+        android.app.AlertDialog.Builder(this, R.style.RundexDialog)
+            .setTitle("🗺 ${o.optString("name")}")
+            .setItems(arrayOf("🔖 북마크에 저장")) { _, _ ->
+                ApiClient(session).addBookmark(uid, routeId) { r ->
+                    runOnUiThread {
+                        r.onSuccess { Toast.makeText(this, "북마크에 저장했어요", Toast.LENGTH_SHORT).show() }
+                            .onFailure { Toast.makeText(this, "저장 실패(이미 저장됐을 수 있어요)", Toast.LENGTH_SHORT).show() }
+                    }
+                }
+            }
+            .setNegativeButton("닫기", null)
+            .show()
     }
 
     /** 마지막으로 만든 계획 코스를 출발지 trim 후 공개 등록 */

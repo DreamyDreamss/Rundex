@@ -53,24 +53,25 @@ import java.util.Locale
 class TrackActivity : Activity(), TrackRecorder.Listener {
 
     private lateinit var mapView: MapView
-    private lateinit var statsText: TextView
-    private lateinit var startStopButton: Button
     private var map: MapLibreMap? = null
     private var trackSource: GeoJsonSource? = null
     private var planSource: GeoJsonSource? = null
     private var meSource: GeoJsonSource? = null
-    private var searchSource: GeoJsonSource? = null
     private lateinit var store: TrackStore
 
-    // 주소 검색
-    private lateinit var searchInput: EditText
-    private lateinit var searchClear: ImageView
-    private lateinit var suggestionList: ListView
-    private val geocoding = GeocodingClient()
-    private val suggestionAdapter = SuggestionAdapter()
-    private val searchHandler = Handler(Looper.getMainLooper())
-    private var pendingSearch: Runnable? = null
-    private var suppressWatcher = false
+    // 러닝 화면 상태 뷰
+    private lateinit var bigStartButton: TextView
+    private lateinit var runStatsOverlay: View
+    private lateinit var countdownOverlay: View
+    private lateinit var countdownText: TextView
+    private lateinit var runDistance: TextView
+    private lateinit var runPace: TextView
+    private lateinit var runKcal: TextView
+    private lateinit var runTime: TextView
+    private lateinit var runMapBar: View
+    private var runMapMode = false
+    private var counting = false
+    private val recoRoutes = ArrayList<org.json.JSONObject>()
 
     // 따라 뛰기 상태
     private var plannedRoute: PlannedRoute? = null
@@ -90,13 +91,30 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         MapLibre.getInstance(this)
         setContentView(R.layout.activity_track)
         NavBar.setup(this, R.id.navRun)
+        RunSegment.setup(this, RunSegment.Tab.RECORD)
         store = TrackStore(File(filesDir, "tracks"))
 
-        statsText = findViewById(R.id.statsText)
-        startStopButton = findViewById(R.id.startStopButton)
-        startStopButton.setOnClickListener { onStartStop() }
-        findViewById<Button>(R.id.historyButton).setOnClickListener { showHistory() }
-        setUpSearch()
+        bigStartButton = findViewById(R.id.bigStartButton)
+        runStatsOverlay = findViewById(R.id.runStatsOverlay)
+        countdownOverlay = findViewById(R.id.countdownOverlay)
+        countdownText = findViewById(R.id.countdownText)
+        runDistance = findViewById(R.id.runDistance)
+        runPace = findViewById(R.id.runPace)
+        runKcal = findViewById(R.id.runKcal)
+        runTime = findViewById(R.id.runTime)
+        runMapBar = findViewById(R.id.runMapBar)
+
+        bigStartButton.setOnClickListener { onStartPressed() }
+        findViewById<View>(R.id.pauseButton).setOnClickListener { togglePause() }
+        findViewById<View>(R.id.resumeButton).setOnClickListener { togglePause() }
+        findViewById<View>(R.id.runMapPause).setOnClickListener { togglePause() }
+        findViewById<View>(R.id.stopButton).setOnClickListener { onStopPressed() }
+        findViewById<View>(R.id.runMapStop).setOnClickListener { onStopPressed() }
+        findViewById<View>(R.id.mapToggleButton).setOnClickListener { setRunMapMode(true) }
+        findViewById<View>(R.id.statsToggleButton).setOnClickListener { setRunMapMode(false) }
+        findViewById<View>(R.id.loadRouteButton).setOnClickListener { loadSavedRoute() }
+        findViewById<View>(R.id.historyButton).setOnClickListener { showHistory() }
+        loadRecommendedCards()
         maybeOfferRecovery()
 
         if (intent.getBooleanExtra("follow", false)) {
@@ -135,15 +153,6 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                         circleStrokeWidth(3f),
                     )
                 )
-                searchSource = GeoJsonSource("search-src").also(style::addSource)
-                style.addLayer(
-                    CircleLayer("search-layer", "search-src").withProperties(
-                        circleRadius(9f),
-                        circleColor("#FF5A2D"),
-                        circleStrokeColor("#FFFFFF"),
-                        circleStrokeWidth(3f),
-                    )
-                )
                 redrawTrack()
                 plannedRoute?.let { plan ->
                     planSource?.setGeoJson(
@@ -155,156 +164,99 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                 }
             }
         }
-        updateButton()
+        setState()
     }
 
-    // ── 주소·장소 검색 ──────────────────────────────────────────────
-
-    private fun setUpSearch() {
-        searchInput = findViewById(R.id.searchInput)
-        searchClear = findViewById(R.id.searchClear)
-        suggestionList = findViewById(R.id.searchSuggestions)
-        suggestionList.adapter = suggestionAdapter
-
-        searchInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
-            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (suppressWatcher) return
-                val q = s?.toString()?.trim().orEmpty()
-                searchClear.visibility = if (q.isEmpty()) View.GONE else View.VISIBLE
-                scheduleSearch(q)
-            }
-        })
-
-        searchInput.setOnEditorActionListener { _, actionId, _ ->
-            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
-                pendingSearch?.let(searchHandler::removeCallbacks)
-                runSearch(searchInput.text.toString().trim())
-                true
-            } else {
-                false
-            }
-        }
-
-        searchClear.setOnClickListener {
-            searchInput.setText("")
-            hideSuggestions()
-        }
-
-        suggestionList.setOnItemClickListener { _, _, position, _ ->
-            moveToPlace(suggestionAdapter.getItem(position))
-        }
-    }
-
-    /** 입력 디바운스(350ms) 후 검색 — 2자 미만이면 추천 숨김 */
-    private fun scheduleSearch(query: String) {
-        pendingSearch?.let(searchHandler::removeCallbacks)
-        if (query.length < 2) {
-            hideSuggestions()
+    /** 시작 버튼 → 권한 확인 후 3·2·1 카운트다운 → 기록 시작 */
+    private fun onStartPressed() {
+        if (TrackRecorder.recording || counting) return
+        if (!hasPermissions()) {
+            requestPermissions(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                    Manifest.permission.POST_NOTIFICATIONS,
+                ), 1
+            )
             return
         }
-        val task = Runnable { runSearch(query) }
-        pendingSearch = task
-        searchHandler.postDelayed(task, 350L)
+        runCountdown { startRecording() }
     }
 
-    private fun runSearch(query: String) {
-        if (query.length < 2) return
-        geocoding.search(query) { result ->
-            runOnUiThread {
-                result.onSuccess { places ->
-                    if (places.isEmpty()) {
-                        hideSuggestions()
-                        Toast.makeText(this, "검색 결과가 없습니다", Toast.LENGTH_SHORT).show()
-                    } else {
-                        suggestionAdapter.submit(places)
-                        suggestionList.visibility = View.VISIBLE
-                    }
-                }.onFailure {
-                    Toast.makeText(this, "검색 실패: 네트워크를 확인하세요", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
+    private fun startRecording() {
+        maybePromptBatteryExemption()
+        TrackRecorder.start(System.currentTimeMillis())
+        startForegroundService(Intent(this, TrackingService::class.java))
+        runMapMode = false
+        setState()
+        refreshStats()
     }
 
-    /** 선택한 장소로 카메라 이동 + 마커 표시, 키보드·추천 닫기 */
-    private fun moveToPlace(place: GeoPlace) {
-        searchSource?.setGeoJson(Point.fromLngLat(place.lon, place.lat))
-        map?.animateCamera(
-            CameraUpdateFactory.newLatLngZoom(LatLng(place.lat, place.lon), 16.0)
-        )
-        suppressWatcher = true
-        searchInput.setText(place.name)
-        searchInput.setSelection(place.name.length)
-        suppressWatcher = false
-        hideSuggestions()
-        hideKeyboard()
-    }
-
-    private fun hideSuggestions() {
-        suggestionAdapter.submit(emptyList())
-        suggestionList.visibility = View.GONE
-    }
-
-    private fun hideKeyboard() {
-        searchInput.clearFocus()
-        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
-            .hideSoftInputFromWindow(searchInput.windowToken, 0)
-    }
-
-    /** 검색 추천 목록 어댑터 (📍 대표 이름 + 전체 주소) */
-    private inner class SuggestionAdapter : BaseAdapter() {
-        private val items = ArrayList<GeoPlace>()
-
-        fun submit(places: List<GeoPlace>) {
-            items.clear()
-            items.addAll(places)
-            notifyDataSetChanged()
-        }
-
-        override fun getCount() = items.size
-        override fun getItem(position: Int) = items[position]
-        override fun getItemId(position: Int) = position.toLong()
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val view = convertView ?: LayoutInflater.from(this@TrackActivity)
-                .inflate(R.layout.row_suggestion, parent, false)
-            val place = items[position]
-            view.findViewById<TextView>(R.id.suggestionName).text = place.name
-            view.findViewById<TextView>(R.id.suggestionAddress).text = place.displayName
-            return view
-        }
-    }
-
-    private fun onStartStop() {
-        if (TrackRecorder.recording) {
-            stopService(Intent(this, TrackingService::class.java))
-            ActiveRunStore(File(filesDir, "data")).clear() // 정상 종료 → 복구 스냅샷 제거
-            val track = TrackRecorder.stop(System.currentTimeMillis())
-            if (track.points.size >= 2) {
-                store.save(track)
-                applyRunToDex(track)
-            } else {
-                Toast.makeText(this, "좌표가 부족해 저장하지 않음", Toast.LENGTH_LONG).show()
-            }
+    /** 정지 → 저장 + 도감 반영 + 공개여부 다이얼로그 */
+    private fun onStopPressed() {
+        if (!TrackRecorder.recording) return
+        stopService(Intent(this, TrackingService::class.java))
+        ActiveRunStore(File(filesDir, "data")).clear()
+        val track = TrackRecorder.stop(System.currentTimeMillis())
+        if (track.points.size >= 2) {
+            store.save(track)
+            applyRunToDex(track)
         } else {
-            if (!hasPermissions()) {
-                requestPermissions(
-                    arrayOf(
-                        Manifest.permission.ACCESS_FINE_LOCATION,
-                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                        Manifest.permission.POST_NOTIFICATIONS,
-                    ), 1
-                )
+            Toast.makeText(this, "좌표가 부족해 저장하지 않음", Toast.LENGTH_LONG).show()
+        }
+        setState()
+    }
+
+    /** 3·2·1 카운트다운 애니메이션 후 콜백 */
+    private fun runCountdown(onDone: () -> Unit) {
+        counting = true
+        countdownOverlay.visibility = View.VISIBLE
+        val h = Handler(Looper.getMainLooper())
+        fun tick(n: Int) {
+            if (n == 0) {
+                counting = false
+                countdownOverlay.visibility = View.GONE
+                onDone()
                 return
             }
-            maybePromptBatteryExemption()
-            TrackRecorder.start(System.currentTimeMillis())
-            startForegroundService(Intent(this, TrackingService::class.java))
+            countdownText.text = n.toString()
+            countdownText.scaleX = 0.4f; countdownText.scaleY = 0.4f; countdownText.alpha = 0f
+            countdownText.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(380).start()
+            h.postDelayed({ tick(n - 1) }, 800)
         }
-        updateButton()
-        refreshStats()
+        tick(3)
+    }
+
+    private fun togglePause() {
+        val now = System.currentTimeMillis()
+        if (TrackRecorder.paused) TrackRecorder.resume(now) else TrackRecorder.pause(now)
+        setState()
+    }
+
+    /** 러닝/대기 상태에 따라 화면 전환. 일시정지 시 지도+스탯 페이지로 자동 전환. */
+    private fun setState() {
+        val running = TrackRecorder.recording
+        val paused = TrackRecorder.paused
+        val showMap = running && (runMapMode || paused)   // 일시정지=지도 페이지
+        findViewById<View>(R.id.idleTop).visibility = if (running) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.idleControls).visibility = if (running) View.GONE else View.VISIBLE
+        runStatsOverlay.visibility = if (running && !showMap) View.VISIBLE else View.GONE
+        runMapBar.visibility = if (showMap) View.VISIBLE else View.GONE
+
+        // 주황(거리) 화면: 러닝 중 ⏸ 일시정지만
+        findViewById<View>(R.id.pauseButton).visibility = if (running && !paused) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.mapToggleButton).visibility = if (running && !paused) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.stopButton).visibility = View.GONE
+        findViewById<View>(R.id.resumeButton).visibility = View.GONE
+
+        // 지도 패널 컨트롤: ⏸/▶ 토글, 📊(거리뷰)은 일시정지 아닐 때만
+        findViewById<TextView>(R.id.runMapPause).text = if (paused) "▶" else "⏸"
+        findViewById<View>(R.id.statsToggleButton).visibility = if (paused) View.GONE else View.VISIBLE
+    }
+
+    private fun setRunMapMode(mapMode: Boolean) {
+        runMapMode = mapMode
+        setState()
     }
 
     /** 비정상 종료로 남은 진행 기록이 있으면 이어서 기록할지/저장할지 제안 */
@@ -319,7 +271,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             .setPositiveButton("이어서 기록") { _, _ ->
                 TrackRecorder.restore(run)
                 startForegroundService(Intent(this, TrackingService::class.java))
-                updateButton(); refreshStats()
+                setState(); refreshStats()
             }
             .setNeutralButton("저장하고 종료") { _, _ ->
                 val track = SavedTrack(
@@ -396,22 +348,6 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             newTitles = TitleEngine.evaluate(ctx, TitleStore(dataDir), System.currentTimeMillis())
         }
 
-        // 서버 동기화(best-effort) — ApiConfig 미설정 시 조용히 무시됨
-        runCatching {
-            val coords = org.json.JSONArray()
-            track.points.forEach { p ->
-                coords.put(org.json.JSONArray().put(p.lon).put(p.lat))
-            }
-            val body = org.json.JSONObject()
-                .put("startedAt", track.startedAtMs)
-                .put("endedAt", track.startedAtMs + track.durationMs)
-                .put("distanceM", track.distanceMeters)
-                .put("durationMs", track.durationMs)
-                .put("source", if (plannedRoute != null) "follow" else "free")
-                .put("coordinates", coords)
-            ApiClient(Session(this)).submitRun(body)
-        }
-
         val sb = StringBuilder()
         sb.append("${formatKm(track.distanceMeters)} · ${formatDuration(track.durationMs)} 기록 저장됨")
         if (index == null) {
@@ -434,9 +370,56 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             if (d.completed) sb.append("\n🏆 [${d.title}] 컬렉션 완성!")
         }
 
-        AlertDialog.Builder(this)
+        // 공개 여부 + 글/태그 입력 → 서버 업로드 → 결과 요약
+        val view = layoutInflater.inflate(R.layout.dialog_publish, null)
+        val captionInput = view.findViewById<EditText>(R.id.captionInput)
+        val tagsInput = view.findViewById<EditText>(R.id.tagsInput)
+        val dialog = android.app.Dialog(this, R.style.RundexDialog).apply {
+            setContentView(view)
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+            setCancelable(false)
+        }
+        view.findViewById<TextView>(R.id.btnPrivate).setOnClickListener {
+            submitRunToServer(track, "private", "", emptyList())
+            dialog.dismiss(); showRunSummary(sb.toString())
+        }
+        view.findViewById<TextView>(R.id.btnPublish).setOnClickListener {
+            submitRunToServer(track, "public",
+                captionInput.text.toString().trim(), parseTags(tagsInput.text.toString()))
+            dialog.dismiss(); showRunSummary(sb.toString())
+        }
+        dialog.show()
+    }
+
+    /** "#한강 야간런, 5K" → ["한강","야간런","5K"] (# · 쉼표 · 공백 구분) */
+    private fun parseTags(raw: String): List<String> =
+        raw.split(Regex("[\\s,#]+")).map { it.trim() }.filter { it.isNotEmpty() }.take(8)
+
+    /** 러닝을 서버에 업로드(best-effort). ApiConfig 미설정 시 조용히 무시됨. */
+    private fun submitRunToServer(track: SavedTrack, visibility: String, caption: String, tags: List<String>) {
+        runCatching {
+            val coords = org.json.JSONArray()
+            track.points.forEach { p ->
+                coords.put(org.json.JSONArray().put(p.lon).put(p.lat))
+            }
+            val body = org.json.JSONObject()
+                .put("startedAt", track.startedAtMs)
+                .put("endedAt", track.startedAtMs + track.durationMs)
+                .put("distanceM", track.distanceMeters)
+                .put("durationMs", track.durationMs)
+                .put("source", if (plannedRoute != null) "follow" else "free")
+                .put("visibility", visibility)
+                .put("caption", caption)
+                .put("tags", org.json.JSONArray(tags))
+                .put("coordinates", coords)
+            ApiClient(Session(this)).submitRun(body)
+        }
+    }
+
+    private fun showRunSummary(message: String) {
+        AlertDialog.Builder(this, R.style.RundexDialog)
             .setTitle("러닝 완료")
-            .setMessage(sb.toString())
+            .setMessage(message)
             .setPositiveButton("확인", null)
             .setNeutralButton("도감 보기") { _, _ ->
                 startActivity(Intent(this, DexActivity::class.java))
@@ -449,7 +432,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(code, perms, results)
-        if (hasPermissions()) onStartStop()
+        if (hasPermissions()) onStartPressed()
         else Toast.makeText(this, "위치 권한이 필요합니다", Toast.LENGTH_LONG).show()
     }
 
@@ -526,27 +509,26 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     }
 
     private fun refreshStats() {
-        if (TrackRecorder.recording) {
-            val now = System.currentTimeMillis()
-            val elapsed = now - TrackRecorder.startedAtMs
-            val dist = TrackRecorder.distanceMeters
-            val currentPace = RunStats.currentPaceSecPerKm(TrackRecorder.points, now)
-            val splits = RunStats.splitsMs(TrackRecorder.points)
-            val sb = StringBuilder()
-            if (offRoute) sb.append("⚠ 경로 이탈!\n")
-            sb.append("${formatKm(dist)} · ${formatDuration(elapsed)} · 평균 ${formatPace(dist, elapsed)}")
-            sb.append("\n현재 ")
-            sb.append(currentPace?.let { "${RunStats.formatPaceSec(it)}/km" } ?: "-'--\"/km")
-            sb.append(" · ${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(dist, elapsed))} km/h")
-            sb.append(" · ${RunStats.calorieKcal(dist).toInt()} kcal")
-            sb.append(" · ▲${TrackRecorder.elevationGainM.toInt()}m")
-            if (splits.isNotEmpty()) {
-                sb.append("\n랩 ${splits.size}km ${RunStats.formatPaceSec(splits.last() / 1000.0)}")
-            }
-            statsText.text = sb.toString()
-        } else if (TrackRecorder.points.isEmpty()) {
-            statsText.text = "기록 대기 중"
-        }
+        if (!TrackRecorder.recording) return
+        val now = System.currentTimeMillis()
+        val elapsed = TrackRecorder.elapsedMs(now)
+        val dist = TrackRecorder.distanceMeters
+        val currentPace = RunStats.currentPaceSecPerKm(TrackRecorder.points, now)
+        val km = String.format(Locale.US, "%.2f", dist / 1000.0)
+        val kcal = "${RunStats.calorieKcal(dist).toInt()}"
+        val time = formatDuration(elapsed)
+        val avgPace = formatPace(dist, elapsed)
+        // 주황(거리) 화면
+        runDistance.text = km
+        runPace.text = currentPace?.let { RunStats.formatPaceSec(it) } ?: "-'--\""
+        runKcal.text = kcal
+        runTime.text = time
+        // 지도 페이지 2×3 그리드
+        findViewById<TextView>(R.id.mapKm).text = km
+        findViewById<TextView>(R.id.mapPace).text = avgPace
+        findViewById<TextView>(R.id.mapTime).text = time
+        findViewById<TextView>(R.id.mapKcal).text = kcal
+        findViewById<TextView>(R.id.mapElev).text = "${TrackRecorder.elevationGainM.toInt()} m"
     }
 
     private fun redrawTrack() {
@@ -560,14 +542,171 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         }
     }
 
-    private fun updateButton() {
-        if (TrackRecorder.recording) {
-            startStopButton.text = "기록 종료"
-            startStopButton.setBackgroundResource(R.drawable.btn_danger)
-        } else {
-            startStopButton.text = "기록 시작"
-            startStopButton.setBackgroundResource(R.drawable.btn_primary)
+    // ── 경로 불러오기 / 추천 코스 카드 ───────────────────────────
+    /** 경로 불러오기 — 내 북마크 코스 목록(+ 최근 계획)에서 골라 따라 뛰기 설정 */
+    private fun loadSavedRoute() {
+        if (TrackRecorder.recording) return
+        val session = Session(this)
+        val uid = session.userId
+        val planned = PlannedRouteStore(File(filesDir, "data")).load()
+
+        if (!ApiConfig.enabled || uid == null) {
+            if (planned != null && planned.points.size >= 2) {
+                setPlannedRoute(planned.points.map { LatLngPoint(it.lat, it.lon) })
+                Toast.makeText(this, "최근 계획 코스를 불러왔어요", Toast.LENGTH_SHORT).show()
+            } else Toast.makeText(this, "북마크하거나 계획한 코스가 없어요", Toast.LENGTH_SHORT).show()
+            return
         }
+
+        ApiClient(session).listMyBookmarks(uid) { result ->
+            runOnUiThread {
+                val ids = ArrayList<String?>(); val labels = ArrayList<String>()
+                if (planned != null && planned.points.size >= 2) {
+                    ids.add(null)
+                    labels.add("📍 최근 계획 코스 · ${String.format(Locale.US, "%.1f", planned.distanceMeters / 1000.0)}km")
+                }
+                result.getOrNull()?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        val r = arr.getJSONObject(i).optJSONObject("routes") ?: continue
+                        ids.add(r.optString("id"))
+                        val km = String.format(Locale.US, "%.1f", r.optDouble("distance_m") / 1000.0)
+                        labels.add("🔖 ${r.optString("name")} · ${km}km")
+                    }
+                }
+                if (labels.isEmpty()) {
+                    Toast.makeText(this, "북마크한 코스가 없어요. 러닝→추천에서 저장하세요", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
+                AlertDialog.Builder(this, R.style.RundexDialog)
+                    .setTitle("불러올 경로 선택")
+                    .setItems(labels.toTypedArray()) { _, i ->
+                        val rid = ids[i]
+                        if (rid == null) {
+                            setPlannedRoute(planned!!.points.map { LatLngPoint(it.lat, it.lon) })
+                            Toast.makeText(this, "경로를 설정했어요. 시작을 누르세요!", Toast.LENGTH_SHORT).show()
+                        } else loadRouteGeom(rid)
+                    }
+                    .setNegativeButton("닫기", null)
+                    .show()
+            }
+        }
+    }
+
+    /** 서버 코스 id 의 경로를 불러와 따라 뛰기 설정 */
+    private fun loadRouteGeom(routeId: String) {
+        ApiClient(Session(this)).listRoutes("id=eq.$routeId&select=geom") { result ->
+            result.onSuccess { arr ->
+                val pts = parseGeomCoords(arr.optJSONObject(0)?.optJSONObject("geom"))
+                runOnUiThread {
+                    if (pts.size >= 2) {
+                        setPlannedRoute(pts)
+                        Toast.makeText(this, "경로를 설정했어요. 시작을 누르세요!", Toast.LENGTH_SHORT).show()
+                    } else Toast.makeText(this, "경로를 불러올 수 없어요", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** 지정 경로를 따라 뛰기 대상으로 설정 + 지도에 표시 + 카메라 이동 */
+    private fun setPlannedRoute(points: List<LatLngPoint>) {
+        if (points.size < 2) return
+        plannedRoute = PlannedRoute(points, 0.0)
+        planSource?.setGeoJson(
+            LineString.fromLngLats(points.map { Point.fromLngLat(it.lon, it.lat) })
+        )
+        map?.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(LatLng(points.first().lat, points.first().lon), 15.0)
+        )
+    }
+
+    /** 추천 코스(공개 routes)를 상단 스와이프 카드로 노출 */
+    private fun loadRecommendedCards() {
+        if (!ApiConfig.enabled) return
+        ApiClient(Session(this)).listRoutes("is_public=eq.true&order=created_at.desc&limit=10") { result ->
+            result.onSuccess { arr ->
+                runOnUiThread {
+                    recoRoutes.clear()
+                    val container = findViewById<android.widget.LinearLayout>(R.id.recoCards)
+                    val dots = findViewById<android.widget.LinearLayout>(R.id.recoDots)
+                    container.removeAllViews(); dots.removeAllViews()
+                    for (i in 0 until arr.length()) {
+                        val o = arr.getJSONObject(i)
+                        recoRoutes.add(o)
+                        val card = layoutInflater.inflate(R.layout.card_reco, container, false)
+                        card.findViewById<TextView>(R.id.recoName).text = o.optString("name")
+                        val km = String.format(Locale.US, "%.1f", o.optDouble("distance_m") / 1000.0)
+                        card.findViewById<TextView>(R.id.recoSub).text =
+                            "${km}km · 난이도 ${"★".repeat(o.optInt("difficulty", 1))}"
+                        card.setOnClickListener { onRecoCardTap(o) }
+                        container.addView(card)
+                        val dot = TextView(this).apply {
+                            text = "•"; textSize = 18f
+                            setTextColor(getColor(if (i == 0) R.color.primary else R.color.divider))
+                            setPadding(6, 0, 6, 0)
+                        }
+                        dots.addView(dot)
+                    }
+                }
+            }
+        }
+    }
+
+    /** 추천 카드 탭 → 상세 팝업(코스 정보 + 경로 미리보기 + 경로설정 버튼) */
+    private fun onRecoCardTap(route: org.json.JSONObject) {
+        val view = layoutInflater.inflate(R.layout.dialog_reco, null)
+        val km = String.format(Locale.US, "%.1f", route.optDouble("distance_m") / 1000.0)
+        view.findViewById<TextView>(R.id.recoDlgName).text = route.optString("name")
+        view.findViewById<TextView>(R.id.recoDlgSub).text =
+            "${km}km · 난이도 ${"★".repeat(route.optInt("difficulty", 1))}"
+        val preview = view.findViewById<RoutePreviewView>(R.id.recoDlgRoute)
+
+        val dialog = android.app.Dialog(this, R.style.RundexDialog).apply {
+            setContentView(view)
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+        }
+
+        // 경로 지오메트리 비동기 로드 → 미리보기 채우기 + '달리기' 활성
+        var loadedPts: List<LatLngPoint> = emptyList()
+        ApiClient(Session(this)).listRoutes("id=eq.${route.optString("id")}&select=geom") { result ->
+            result.onSuccess { arr ->
+                val pts = parseGeomCoords(arr.optJSONObject(0)?.optJSONObject("geom"))
+                runOnUiThread {
+                    loadedPts = pts
+                    preview.setRoute(pts.map { doubleArrayOf(it.lon, it.lat) })
+                }
+            }
+        }
+
+        view.findViewById<TextView>(R.id.recoDlgRun).setOnClickListener {
+            if (loadedPts.size >= 2) {
+                setPlannedRoute(loadedPts)
+                Toast.makeText(this, "‘${route.optString("name")}’ 경로를 설정했어요. 시작을 누르세요!", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+            } else {
+                Toast.makeText(this, "경로를 불러오는 중이에요…", Toast.LENGTH_SHORT).show()
+            }
+        }
+        view.findViewById<TextView>(R.id.recoDlgBookmark).setOnClickListener {
+            val session = Session(this); val uid = session.userId
+            if (uid != null) ApiClient(session).addBookmark(uid, route.optString("id")) { r ->
+                runOnUiThread {
+                    r.onSuccess { Toast.makeText(this, "북마크에 저장했어요", Toast.LENGTH_SHORT).show() }
+                        .onFailure { Toast.makeText(this, "이미 저장됐을 수 있어요", Toast.LENGTH_SHORT).show() }
+                }
+            }
+        }
+        view.findViewById<TextView>(R.id.recoDlgClose).setOnClickListener { dialog.dismiss() }
+        dialog.show()
+    }
+
+    private fun parseGeomCoords(geom: org.json.JSONObject?): List<LatLngPoint> {
+        val coords = geom?.optJSONArray("coordinates") ?: return emptyList()
+        return runCatching {
+            (0 until coords.length()).map {
+                val c = coords.getJSONArray(it)
+                LatLngPoint(c.getDouble(1), c.getDouble(0))
+            }
+        }.getOrDefault(emptyList())
     }
 
     override fun onStart() {
@@ -588,7 +727,6 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     override fun onDestroy() {
         super.onDestroy()
         mapView.onDestroy()
-        searchHandler.removeCallbacksAndMessages(null)
     }
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)

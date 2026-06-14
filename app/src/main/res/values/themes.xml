@@ -4,4 +4,13 @@
     <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
         <item name="android:windowFullscreen">true</item>
     </style>
+
+    <!-- 앱 톤에 맞춘 둥근 다이얼로그 (시스템 기본 팝업 탈피) -->
+    <style name="RundexDialog" parent="@android:style/Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowBackground">@drawable/dialog_bg</item>
+        <item name="android:colorAccent">@color/primary</item>
+        <item name="android:textColorPrimary">@color/textDark</item>
+        <item name="android:windowMinWidthMajor">88%</item>
+        <item name="android:windowMinWidthMinor">88%</item>
+    </style>
 </resources>

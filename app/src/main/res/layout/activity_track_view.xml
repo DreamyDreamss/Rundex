@@ -54,5 +54,18 @@
             android:text="GPX"
             android:textColor="@color/textDark"
             android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/followCourseButton"
+            android:layout_width="wrap_content"
+            android:layout_height="52dp"
+            android:background="@drawable/btn_primary"
+            android:paddingStart="28dp"
+            android:paddingEnd="28dp"
+            android:text="🏃 이 코스 따라 뛰기"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
     </LinearLayout>
 </FrameLayout>

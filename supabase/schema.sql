@@ -15,11 +15,21 @@ create table if not exists profiles (
 );
 
 -- 신규 가입 시 프로필 자동 생성
-create or replace function handle_new_user() returns trigger as $$
+-- ※ security definer 함수는 search_path 를 고정해야 한다. 익명 가입은 auth 컨텍스트에서
+--   트리거가 도는데 search_path 에 public 이 없으면 profiles 를 못 찾아 가입이 500 으로 실패한다.
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  u text := replace(gen_random_uuid()::text, '-', '');
 begin
-  insert into profiles(id) values (new.id) on conflict do nothing;
+  -- 신규 사용자에게 DB에 겹치지 않는 기본 닉네임/핸들 부여
+  --   display_name: '러너#A3F9' (친근한 표시용, 난수 4자리)
+  --   handle:       'runner_xxxxxxxx' (unique 제약으로 고유 보장, 난수 8자리)
+  insert into public.profiles(id, handle, display_name)
+    values (new.id, 'runner_' || substr(u, 1, 8), '러너#' || upper(substr(u, 1, 4)))
+    on conflict (id) do nothing;
   return new;
-end; $$ language plpgsql security definer;
+end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function handle_new_user();
@@ -194,6 +204,12 @@ create policy profiles_read   on profiles for select using (true);
 create policy profiles_write  on profiles for update using (auth.uid() = id);
 -- 본인 소유 데이터만 읽고 쓰기
 create policy runs_own   on runs   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- 공개(public) 런은 누구나 읽기 — 피드용. (permissive 정책은 OR 결합되어 본인 비공개 런도 본인은 계속 보임)
+create policy runs_public_read on runs for select using (visibility = 'public');
+-- 공개 런의 동거리 원장은 누구나 읽기 (피드 '지나는 동 N곳' 집계용)
+alter table run_region_ledger enable row level security;
+create policy ledger_public_read on run_region_ledger for select using (
+  exists (select 1 from runs r where r.id = run_region_ledger.run_id and r.visibility = 'public'));
 create policy dex_own    on dex_entries for select using (auth.uid() = user_id);
 create policy theme_own  on theme_progress for select using (auth.uid() = user_id);
 create policy ut_own     on user_titles for select using (auth.uid() = user_id);
@@ -214,10 +230,45 @@ alter table crew_members enable row level security;
 alter table crew_goals   enable row level security;
 create policy crews_read   on crews for select using (
   exists (select 1 from crew_members m where m.crew_id = crews.id and m.user_id = auth.uid()));
-create policy cm_read      on crew_members for select using (
-  exists (select 1 from crew_members m where m.crew_id = crew_members.crew_id and m.user_id = auth.uid()));
+-- ※ crew_members 정책이 crew_members 를 직접 참조하면 무한재귀(42P17)가 난다.
+--   security definer 함수로 멤버십을 확인해 재귀를 끊는다.
+create or replace function is_crew_member(c uuid, u uuid) returns boolean
+  language sql security definer stable set search_path = public as $$
+    select exists(select 1 from crew_members m where m.crew_id = c and m.user_id = u);
+  $$;
+create policy cm_read      on crew_members for select using (is_crew_member(crew_id, auth.uid()));
 create policy cm_self      on crew_members for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy goals_read   on crew_goals for select using (
   exists (select 1 from crew_members m where m.crew_id = crew_goals.crew_id and m.user_id = auth.uid()));
 
--- 테마 정의 / 칭호 정의 / 지역은 공개 읽기 (RLS 미적용 = 공개)
+-- 테마 정의 / 칭호 정의 / 지역 = 공개 읽기 전용
+-- ※ Supabase 는 SQL 로 만든 테이블에도 RLS 가 켜질 수 있다(정책 없으면 anon 은 0행).
+--   읽기 정책만 주고 쓰기 정책은 두지 않아 "공개 읽기 + 쓰기 차단"을 명시적으로 보장한다.
+alter table theme_collections enable row level security;
+alter table theme_places      enable row level security;
+alter table titles            enable row level security;
+alter table regions           enable row level security;
+create policy themecol_read   on theme_collections for select using (true);
+create policy themeplace_read on theme_places      for select using (true);
+create policy titles_read     on titles            for select using (true);
+create policy regions_read    on regions           for select using (true);
+
+-- 공개 피드 뷰 (인스타형) — 공개 런 + 작성자 프로필 + 경로(GeoJSON) + 지나는 동 수.
+-- security_invoker=on: 호출자 RLS가 적용되어 runs_public_read 로 공개 런만 노출된다.
+create or replace view public_feed
+  with (security_invoker = on) as
+  select
+    r.id            as run_id,
+    r.user_id       as user_id,
+    p.display_name  as display_name,
+    p.handle        as handle,
+    p.rep_title_ids as rep_title_ids,
+    r.distance_m    as distance_m,
+    r.duration_ms   as duration_ms,
+    r.started_at    as started_at,
+    r.created_at    as created_at,
+    st_asgeojson(r.geom) as geojson,
+    (select count(*) from run_region_ledger l where l.run_id = r.id) as region_count
+  from runs r
+  join profiles p on p.id = r.user_id
+  where r.visibility = 'public';

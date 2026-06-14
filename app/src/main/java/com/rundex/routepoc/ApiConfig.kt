@@ -7,8 +7,8 @@ package com.rundex.routepoc
  * 예) BASE_URL = "https://<project-ref>.supabase.co"
  */
 object ApiConfig {
-    const val BASE_URL = ""
-    const val ANON_KEY = ""
+    const val BASE_URL = "https://jtbtqmcwjtuzsfpqzunf.supabase.co"
+    const val ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0YnRxbWN3anR1enNmcHF6dW5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzI1MTQsImV4cCI6MjA5NjkwODUxNH0.w6-AUyifqYlcTkXRzLfX8TtQGwPEF-pu2dUiBT5rA94"
 
     val enabled: Boolean get() = BASE_URL.isNotBlank()
 }

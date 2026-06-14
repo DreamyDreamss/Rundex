@@ -1,18 +1,53 @@
--- 러닝 도감 — 서버 권위 로직 (RPC)
--- 클라 ApiClient.submitRun → supabase.rpc('submit_run', { payload }) 로 호출
+-- ───────────────────────────────────────────────────────────────
+-- 러닝도감 마이그레이션: 홈 피드 + 공개여부 + 고유 닉네임
+-- 기존 DB(schema.sql/functions.sql 적용본) 위에 "한 번" 실행하면 안전합니다.
+-- (create or replace / drop policy if exists 가드로 재실행에도 깨지지 않음)
+-- 적용: Supabase 대시보드 → SQL Editor → 붙여넣기 → Run
+-- ───────────────────────────────────────────────────────────────
 
--- 누적 거리 → 등급 라벨 (앱 Grades.kt 와 동일 규칙)
-create or replace function grade_of(total_m double precision) returns text as $$
-  select case
-    when total_m >= 200000 then 'GOLD'
-    when total_m >=  50000 then 'SILVER'
-    when total_m >=  10000 then 'BRONZE'
-    else 'CARD' end;
-$$ language sql immutable;
+-- 1) 신규 가입 시 DB에 겹치지 않는 기본 닉네임/핸들 부여 ----------------
+--    display_name: '러너#A3F9' (난수 4자리) / handle: 'runner_xxxxxxxx'(unique)
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  u text := replace(gen_random_uuid()::text, '-', '');
+begin
+  insert into public.profiles(id, handle, display_name)
+    values (new.id, 'runner_' || substr(u, 1, 8), '러너#' || upper(substr(u, 1, 4)))
+    on conflict (id) do nothing;
+  return new;
+end; $$;
 
--- 러닝 업로드 처리: 동거리 분배 + 도감/등급 + 테마 + 칭호
--- payload: { startedAt(ms), endedAt(ms), distanceM, durationMs, source,
---            coordinates: [[lon,lat], ...] }
+-- 2) 공개(public) 런은 누구나 읽기 — 피드용 ---------------------------
+drop policy if exists runs_public_read on runs;
+create policy runs_public_read on runs for select using (visibility = 'public');
+
+-- 2-1) 공개 런의 동거리 원장은 누구나 읽기 (피드 '지나는 동 N곳' 집계용)
+alter table run_region_ledger enable row level security;
+drop policy if exists ledger_public_read on run_region_ledger;
+create policy ledger_public_read on run_region_ledger for select using (
+  exists (select 1 from runs r where r.id = run_region_ledger.run_id and r.visibility = 'public'));
+
+-- 3) 홈 피드 뷰 (인스타형): 공개 런 + 작성자 프로필 + 경로(GeoJSON) -------
+create or replace view public_feed
+  with (security_invoker = on) as
+  select
+    r.id            as run_id,
+    r.user_id       as user_id,
+    p.display_name  as display_name,
+    p.handle        as handle,
+    p.rep_title_ids as rep_title_ids,
+    r.distance_m    as distance_m,
+    r.duration_ms   as duration_ms,
+    r.started_at    as started_at,
+    r.created_at    as created_at,
+    st_asgeojson(r.geom) as geojson,
+    (select count(*) from run_region_ledger l where l.run_id = r.id) as region_count
+  from runs r
+  join profiles p on p.id = r.user_id
+  where r.visibility = 'public';
+
+-- 4) 러닝 업로드 RPC — payload.visibility 반영 + 공개일 때만 피드 게시 ----
 create or replace function submit_run(payload jsonb)
 returns jsonb
 language plpgsql
@@ -35,7 +70,6 @@ declare
 begin
   if uid is null then raise exception 'unauthenticated'; end if;
 
-  -- 좌표 → LineString
   select st_makeline(array(
     select st_setsrid(st_makepoint((c->>0)::float, (c->>1)::float), 4326)
     from jsonb_array_elements(payload->'coordinates') c
@@ -53,7 +87,6 @@ begin
     line
   ) returning id into new_run_id;
 
-  -- 동별 거리 분배 (경로 ∩ 행정동)
   for rec in
     select r.code, r.name,
            st_length(geography(st_intersection(line, r.geom))) as meters
@@ -84,7 +117,6 @@ begin
     end if;
   end loop;
 
-  -- 테마 도감 (반경 통과)
   for rec in
     select tp.id, tp.name, tc.slug, tc.title
     from theme_places tp join theme_collections tc on tc.id = tp.collection_id
@@ -96,7 +128,6 @@ begin
     theme_delta := theme_delta || jsonb_build_object('slug', rec.slug, 'place', rec.name);
   end loop;
 
-  -- 칭호 평가 (마일스톤/등급) — 보유 안 한 것만 부여
   select count(*) into discovered_count from dex_entries where user_id = uid;
   select coalesce(sum(distance_m),0) into lifetime_m from runs where user_id = uid;
 
@@ -114,7 +145,7 @@ begin
   )
   select coalesce(jsonb_agg(jsonb_build_object('name', c.name)), '[]') into new_titles from cand c;
 
-  -- 활동 피드 — 공개(public) 런만 피드에 게시한다(비공개는 기록만 저장)
+  -- 공개(public) 런만 피드에 게시한다(비공개는 기록만 저장)
   if coalesce(payload->>'visibility','private') = 'public' then
     insert into activities(user_id, type, payload) values (
       uid, 'run_completed',
@@ -132,33 +163,7 @@ begin
 end;
 $$;
 
--- 크루 생성: 크루 + 소유자 멤버십을 한 번에 만들고 크루를 반환
-create or replace function create_crew(crew_name text)
-returns crews
-language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); c crews;
-begin
-  if uid is null then raise exception 'unauthenticated'; end if;
-  insert into crews(name, owner_id) values (crew_name, uid) returning * into c;
-  insert into crew_members(crew_id, user_id, role) values (c.id, uid, 'owner');
-  return c;
-end; $$;
-
--- 크루 가입: 가입 코드로 크루를 찾아 멤버로 추가하고 크루를 반환
-create or replace function join_crew(code text)
-returns crews
-language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); c crews;
-begin
-  if uid is null then raise exception 'unauthenticated'; end if;
-  select * into c from crews where join_code = lower(code);
-  if c.id is null then raise exception 'crew not found'; end if;
-  insert into crew_members(crew_id, user_id) values (c.id, uid)
-    on conflict do nothing;
-  return c;
-end; $$;
-
--- 과거 런 공개/비공개 전환 — 본인 런만. 공개 시 피드 활동 생성(중복 방지), 비공개 시 제거.
+-- 5) 과거 런 공개/비공개 전환 RPC ------------------------------------
 create or replace function set_run_visibility(p_run_id uuid, p_visibility text)
 returns void
 language plpgsql security definer set search_path = public as $$

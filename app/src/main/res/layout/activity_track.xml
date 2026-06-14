@@ -1,128 +1,350 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical">
+    android:layout_height="match_parent">
 
-    <FrameLayout
+    <!-- ── 일반(시작 대기) 콘텐츠 ─────────────────────────────── -->
+    <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-        <org.maplibre.android.maps.MapView
-            android:id="@+id/trackMapView"
+        <include layout="@layout/segment_bar" />
+
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_height="0dp"
+            android:layout_weight="1">
+
+            <org.maplibre.android.maps.MapView
+                android:id="@+id/trackMapView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <!-- 상단: 추천 코스 스와이프 카드 + 점 인디케이터 -->
+            <LinearLayout
+                android:id="@+id/idleTop"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:orientation="vertical"
+                android:paddingTop="12dp">
+
+                <HorizontalScrollView
+                    android:id="@+id/recoScroll"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="2dp"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:id="@+id/recoCards"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal" />
+                </HorizontalScrollView>
+
+                <LinearLayout
+                    android:id="@+id/recoDots"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <!-- 하단 컨트롤: 경로 불러오기 · 시작(큰) · 저장된 기록 -->
+            <LinearLayout
+                android:id="@+id/idleControls"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="26dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/loadRouteButton"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:background="@drawable/btn_circle_secondary"
+                        android:elevation="4dp"
+                        android:gravity="center"
+                        android:text="📂"
+                        android:textSize="22sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="경로"
+                        android:textColor="@color/textDark"
+                        android:textSize="11sp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/bigStartButton"
+                    android:layout_width="116dp"
+                    android:layout_height="116dp"
+                    android:layout_marginStart="24dp"
+                    android:layout_marginEnd="24dp"
+                    android:background="@drawable/btn_circle_primary"
+                    android:elevation="8dp"
+                    android:gravity="center"
+                    android:text="시작"
+                    android:textColor="#FFFFFF"
+                    android:textSize="26sp"
+                    android:textStyle="bold" />
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="vertical">
+                    <TextView
+                        android:id="@+id/historyButton"
+                        android:layout_width="62dp"
+                        android:layout_height="62dp"
+                        android:background="@drawable/btn_circle_secondary"
+                        android:elevation="4dp"
+                        android:gravity="center"
+                        android:text="📋"
+                        android:textSize="22sp" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="기록"
+                        android:textColor="@color/textDark"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- 러닝 중 '지도 모드' 하단 패널: 2×3 스탯 그리드 + 컨트롤 (기본 숨김) -->
+            <LinearLayout
+                android:id="@+id/runMapBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom"
+                android:layout_margin="12dp"
+                android:background="@drawable/card_bg"
+                android:elevation="10dp"
+                android:orientation="vertical"
+                android:padding="18dp"
+                android:visibility="gone">
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                        <TextView android:id="@+id/mapKm" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="0.00" android:textColor="@color/textDark" android:textSize="22sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="킬로미터" android:textColor="@color/textGrey" android:textSize="11sp" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                        <TextView android:id="@+id/mapPace" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="-'--&quot;" android:textColor="@color/textDark" android:textSize="22sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="평균 페이스" android:textColor="@color/textGrey" android:textSize="11sp" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                        <TextView android:id="@+id/mapTime" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="00:00" android:textColor="@color/textDark" android:textSize="22sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="시간" android:textColor="@color/textGrey" android:textSize="11sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="14dp" android:orientation="horizontal">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                        <TextView android:id="@+id/mapKcal" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="0" android:textColor="@color/textDark" android:textSize="22sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="칼로리" android:textColor="@color/textGrey" android:textSize="11sp" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                        <TextView android:id="@+id/mapElev" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="0 m" android:textColor="@color/textDark" android:textSize="22sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="고도" android:textColor="@color/textGrey" android:textSize="11sp" />
+                    </LinearLayout>
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                        android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="--" android:textColor="@color/textDark" android:textSize="22sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                            android:text="BPM" android:textColor="@color/textGrey" android:textSize="11sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:gravity="center" android:orientation="horizontal">
+                    <TextView
+                        android:id="@+id/statsToggleButton"
+                        android:layout_width="54dp" android:layout_height="54dp"
+                        android:layout_marginEnd="20dp"
+                        android:background="@drawable/btn_circle_secondary"
+                        android:gravity="center" android:text="📊" android:textSize="20sp" />
+                    <TextView
+                        android:id="@+id/runMapPause"
+                        android:layout_width="72dp" android:layout_height="72dp"
+                        android:background="@drawable/btn_circle_dark"
+                        android:gravity="center" android:text="⏸" android:textColor="#FFFFFF" android:textSize="24sp" />
+                    <TextView
+                        android:id="@+id/runMapStop"
+                        android:layout_width="54dp" android:layout_height="54dp"
+                        android:layout_marginStart="20dp"
+                        android:background="@drawable/btn_danger"
+                        android:gravity="center" android:text="■" android:textColor="#FFFFFF" android:textSize="18sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </FrameLayout>
+
+        <include layout="@layout/bottom_nav" />
+    </LinearLayout>
+
+    <!-- ── 러닝 중 (주황 스탯 화면) ───────────────────────────── -->
+    <LinearLayout
+        android:id="@+id/runStatsOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/primary"
+        android:orientation="vertical"
+        android:visibility="gone">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="top"
-            android:orientation="vertical"
-            android:padding="14dp">
+            android:layout_marginTop="40dp"
+            android:orientation="horizontal">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:background="@drawable/search_bg"
-                android:elevation="6dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingStart="16dp"
-                android:paddingEnd="8dp">
-
-                <ImageView
-                    android:layout_width="22dp"
-                    android:layout_height="22dp"
-                    android:src="@drawable/ic_search"
-                    android:contentDescription="검색" />
-
-                <EditText
-                    android:id="@+id/searchInput"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:background="@android:color/transparent"
-                    android:hint="주소·장소 검색"
-                    android:imeOptions="actionSearch"
-                    android:inputType="text"
-                    android:maxLines="1"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="8dp"
-                    android:singleLine="true"
-                    android:textColor="@color/textDark"
-                    android:textColorHint="@color/textGrey"
-                    android:textSize="15sp" />
-
-                <ImageView
-                    android:id="@+id/searchClear"
-                    android:layout_width="40dp"
-                    android:layout_height="match_parent"
-                    android:padding="10dp"
-                    android:src="@android:drawable/ic_menu_close_clear_cancel"
-                    android:contentDescription="지우기"
-                    android:visibility="gone" />
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                <TextView android:id="@+id/runPace" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="-'--&quot;" android:textColor="#1C1C1E" android:textSize="24sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="페이스" android:textColor="#7A3A1E" android:textSize="13sp" />
             </LinearLayout>
 
-            <ListView
-                android:id="@+id/searchSuggestions"
-                android:layout_width="match_parent"
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                <TextView android:id="@+id/runKcal" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="0" android:textColor="#1C1C1E" android:textSize="24sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="kcal" android:textColor="#7A3A1E" android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                <TextView android:id="@+id/runTime" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="00:00" android:textColor="#1C1C1E" android:textSize="24sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:text="시간" android:textColor="#7A3A1E" android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical">
+            <TextView
+                android:id="@+id/runDistance"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/suggestions_bg"
-                android:divider="@color/divider"
-                android:dividerHeight="1dp"
-                android:elevation="6dp"
-                android:maxHeight="276dp"
+                android:text="0.00"
+                android:textColor="#1C1C1E"
+                android:textSize="96sp"
+                android:textStyle="bold" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="킬로미터"
+                android:textColor="#7A3A1E"
+                android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="56dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <!-- 러닝 중: 🗺 + ⏸ 일시정지 -->
+            <TextView
+                android:id="@+id/mapToggleButton"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_marginEnd="28dp"
+                android:background="@drawable/btn_circle_secondary"
+                android:gravity="center"
+                android:text="🗺"
+                android:textSize="22sp" />
+
+            <TextView
+                android:id="@+id/pauseButton"
+                android:layout_width="96dp"
+                android:layout_height="96dp"
+                android:background="@drawable/btn_circle_dark"
+                android:gravity="center"
+                android:text="⏸"
+                android:textColor="#FFFFFF"
+                android:textSize="30sp" />
+
+            <!-- 일시정지: ■ 정지 + ▶ 재개 -->
+            <TextView
+                android:id="@+id/stopButton"
+                android:layout_width="88dp"
+                android:layout_height="88dp"
+                android:background="@drawable/btn_circle_dark"
+                android:gravity="center"
+                android:text="■"
+                android:textColor="#FFFFFF"
+                android:textSize="26sp"
                 android:visibility="gone" />
 
             <TextView
-                android:id="@+id/statsText"
-            android:lineSpacingExtra="5dp"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/card_bg"
-                android:elevation="4dp"
-                android:padding="16dp"
-                android:text="기록 대기 중"
-                android:textColor="@color/textDark"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:id="@+id/resumeButton"
+                android:layout_width="88dp"
+                android:layout_height="88dp"
+                android:layout_marginStart="28dp"
+                android:background="@drawable/btn_circle_white"
+                android:gravity="center"
+                android:text="▶"
+                android:textColor="@color/primary"
+                android:textSize="26sp"
+                android:visibility="gone" />
         </LinearLayout>
+    </LinearLayout>
 
-        <LinearLayout
+    <!-- ── 카운트다운 ────────────────────────────────────────── -->
+    <FrameLayout
+        android:id="@+id/countdownOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#111315"
+        android:visibility="gone">
+        <TextView
+            android:id="@+id/countdownText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="20dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/startStopButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:background="@drawable/btn_primary"
-                android:paddingStart="32dp"
-                android:paddingEnd="32dp"
-                android:text="기록 시작"
-                android:textColor="#FFFFFF"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/historyButton"
-                android:layout_width="wrap_content"
-                android:layout_height="56dp"
-                android:layout_marginStart="12dp"
-                android:background="@drawable/btn_secondary"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:text="저장된 기록"
-                android:textColor="@color/textDark"
-                android:textSize="14sp" />
-        </LinearLayout>
+            android:layout_gravity="center"
+            android:text="3"
+            android:textColor="@color/primary"
+            android:textSize="160sp"
+            android:textStyle="bold" />
     </FrameLayout>
-
-    <include layout="@layout/bottom_nav" />
-</LinearLayout>
+</FrameLayout>

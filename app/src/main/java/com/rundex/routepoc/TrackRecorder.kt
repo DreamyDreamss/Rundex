@@ -13,9 +13,35 @@ object TrackRecorder {
     private val filter = LocationFilter()
 
     var recording = false; private set
+    var paused = false; private set
     var startedAtMs = 0L; private set
     var distanceMeters = 0.0; private set
     var elevationGainM = 0.0; private set
+
+    // 일시정지 누적 — 경과시간에서 제외
+    private var pausedAtMs = 0L
+    private var pausedTotalMs = 0L
+
+    /** 일시정지를 제외한 실제 경과 시간(ms) */
+    fun elapsedMs(nowMs: Long): Long {
+        if (!recording) return 0L
+        val pausedNow = if (paused) nowMs - pausedAtMs else 0L
+        return (nowMs - startedAtMs - pausedTotalMs - pausedNow).coerceAtLeast(0L)
+    }
+
+    fun pause(nowMs: Long) {
+        if (recording && !paused) { paused = true; pausedAtMs = nowMs; notifyUpdate() }
+    }
+
+    fun resume(nowMs: Long) {
+        if (recording && paused) {
+            pausedTotalMs += nowMs - pausedAtMs
+            paused = false
+            notifyUpdate()
+        }
+    }
+
+    private fun notifyUpdate() = listeners.forEach { it.onUpdate() }
 
     private val _points = mutableListOf<TrackPoint>()
     val points: List<TrackPoint> get() = _points
@@ -36,7 +62,7 @@ object TrackRecorder {
 
     /** @return 점이 채택되면 true (기록 중 아님/필터 폐기면 false) */
     fun addPoint(lat: Double, lon: Double, accuracyM: Float, nowMs: Long, altitudeM: Double = Double.NaN): Boolean {
-        if (!recording || !filter.offer(lat, lon, accuracyM, nowMs)) return false
+        if (!recording || paused || !filter.offer(lat, lon, accuracyM, nowMs)) return false
         val last = _points.lastOrNull()
         if (last != null) {
             distanceMeters += Haversine.meters(last.lat, last.lon, lat, lon)
@@ -53,11 +79,13 @@ object TrackRecorder {
     }
 
     fun stop(nowMs: Long): SavedTrack {
+        val dur = elapsedMs(nowMs)
         recording = false
+        paused = false
         return SavedTrack(
             id = startedAtMs.toString(),
             startedAtMs = startedAtMs,
-            durationMs = nowMs - startedAtMs,
+            durationMs = dur,
             distanceMeters = distanceMeters,
             points = _points.toList(),
             elevationGainM = elevationGainM,
@@ -80,6 +108,9 @@ object TrackRecorder {
 
     fun reset() {
         recording = false
+        paused = false
+        pausedAtMs = 0L
+        pausedTotalMs = 0L
         startedAtMs = 0L
         distanceMeters = 0.0
         elevationGainM = 0.0

@@ -1,23 +1,59 @@
--- 러닝 도감 — 서버 권위 로직 (RPC)
--- 클라 ApiClient.submitRun → supabase.rpc('submit_run', { payload }) 로 호출
+-- ───────────────────────────────────────────────────────────────
+-- 마이그레이션 2: 피드 글·태그 + 경로 북마크 + 도감 지도용 뷰
+-- migration_feed.sql 다음에 한 번 실행 (재실행 안전).
+-- ───────────────────────────────────────────────────────────────
 
--- 누적 거리 → 등급 라벨 (앱 Grades.kt 와 동일 규칙)
-create or replace function grade_of(total_m double precision) returns text as $$
-  select case
-    when total_m >= 200000 then 'GOLD'
-    when total_m >=  50000 then 'SILVER'
-    when total_m >=  10000 then 'BRONZE'
-    else 'CARD' end;
-$$ language sql immutable;
+-- A) 런에 글(캡션)·태그 -------------------------------------------
+alter table runs add column if not exists caption text;
+alter table runs add column if not exists tags text[] not null default '{}';
 
--- 러닝 업로드 처리: 동거리 분배 + 도감/등급 + 테마 + 칭호
--- payload: { startedAt(ms), endedAt(ms), distanceM, durationMs, source,
---            coordinates: [[lon,lat], ...] }
+-- B) 경로 북마크 --------------------------------------------------
+create table if not exists route_bookmarks (
+  user_id   uuid references profiles(id) on delete cascade,
+  route_id  uuid references routes(id)   on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, route_id)
+);
+alter table route_bookmarks enable row level security;
+drop policy if exists bookmarks_own on route_bookmarks;
+create policy bookmarks_own on route_bookmarks
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- C) 홈 피드 뷰 재생성 — caption/tags 추가 ------------------------
+-- (컬럼 추가 시 위치 변경 때문에 replace 불가 → drop 후 재생성)
+drop view if exists public_feed;
+create view public_feed
+  with (security_invoker = on) as
+  select
+    r.id            as run_id,
+    r.user_id       as user_id,
+    p.display_name  as display_name,
+    p.handle        as handle,
+    p.rep_title_ids as rep_title_ids,
+    r.distance_m    as distance_m,
+    r.duration_ms   as duration_ms,
+    r.started_at    as started_at,
+    r.created_at    as created_at,
+    r.caption       as caption,
+    r.tags          as tags,
+    st_asgeojson(r.geom) as geojson,
+    (select count(*) from run_region_ledger l where l.run_id = r.id) as region_count
+  from runs r
+  join profiles p on p.id = r.user_id
+  where r.visibility = 'public';
+
+-- D) 도감 지도용 뷰 — 내가 발견한 동의 경계(GeoJSON) + 누적거리 ----
+create or replace view my_dex_geo
+  with (security_invoker = on) as
+  select d.user_id, d.region_code, r.name, r.sido, r.sigungu,
+         d.total_m, st_asgeojson(r.geom) as geojson
+  from dex_entries d
+  join regions r on r.code = d.region_code;
+
+-- E) submit_run 갱신 — caption/tags 반영 -------------------------
 create or replace function submit_run(payload jsonb)
 returns jsonb
-language plpgsql
-security definer
-set search_path = public
+language plpgsql security definer set search_path = public
 as $$
 declare
   uid uuid := auth.uid();
@@ -32,16 +68,20 @@ declare
   new_titles  jsonb := '[]';
   discovered_count int;
   lifetime_m double precision;
+  v_tags text[];
 begin
   if uid is null then raise exception 'unauthenticated'; end if;
 
-  -- 좌표 → LineString
   select st_makeline(array(
     select st_setsrid(st_makepoint((c->>0)::float, (c->>1)::float), 4326)
     from jsonb_array_elements(payload->'coordinates') c
   )) into line;
 
-  insert into runs(user_id, started_at, ended_at, distance_m, duration_ms, source, visibility, geom)
+  select coalesce(array_agg(t), '{}') into v_tags
+    from jsonb_array_elements_text(coalesce(payload->'tags','[]'::jsonb)) t;
+
+  insert into runs(user_id, started_at, ended_at, distance_m, duration_ms,
+                   source, visibility, caption, tags, geom)
   values (
     uid,
     to_timestamp((payload->>'startedAt')::bigint / 1000.0),
@@ -50,10 +90,11 @@ begin
     (payload->>'durationMs')::bigint,
     coalesce(payload->>'source','free'),
     coalesce(payload->>'visibility','private'),
+    nullif(payload->>'caption',''),
+    v_tags,
     line
   ) returning id into new_run_id;
 
-  -- 동별 거리 분배 (경로 ∩ 행정동)
   for rec in
     select r.code, r.name,
            st_length(geography(st_intersection(line, r.geom))) as meters
@@ -61,14 +102,11 @@ begin
     where line is not null and st_intersects(line, r.geom)
   loop
     if rec.meters <= 0 then continue; end if;
-
     insert into run_region_ledger(run_id, region_code, meters)
-    values (new_run_id, rec.code, rec.meters)
-    on conflict do nothing;
+    values (new_run_id, rec.code, rec.meters) on conflict do nothing;
 
     select total_m into before_m from dex_entries
       where user_id = uid and region_code = rec.code;
-
     if before_m is null then
       insert into dex_entries(user_id, region_code, first_visit_at, total_m)
         values (uid, rec.code, now(), rec.meters);
@@ -84,7 +122,6 @@ begin
     end if;
   end loop;
 
-  -- 테마 도감 (반경 통과)
   for rec in
     select tp.id, tp.name, tc.slug, tc.title
     from theme_places tp join theme_collections tc on tc.id = tp.collection_id
@@ -96,7 +133,6 @@ begin
     theme_delta := theme_delta || jsonb_build_object('slug', rec.slug, 'place', rec.name);
   end loop;
 
-  -- 칭호 평가 (마일스톤/등급) — 보유 안 한 것만 부여
   select count(*) into discovered_count from dex_entries where user_id = uid;
   select coalesce(sum(distance_m),0) into lifetime_m from runs where user_id = uid;
 
@@ -109,12 +145,10 @@ begin
         (t.type='grade'     and exists (select 1 from dex_entries d where d.user_id=uid and grade_of(d.total_m) = upper(t.criteria->>'grade')))
       )
   ), ins as (
-    insert into user_titles(user_id, title_id)
-      select uid, id from cand returning title_id
+    insert into user_titles(user_id, title_id) select uid, id from cand returning title_id
   )
   select coalesce(jsonb_agg(jsonb_build_object('name', c.name)), '[]') into new_titles from cand c;
 
-  -- 활동 피드 — 공개(public) 런만 피드에 게시한다(비공개는 기록만 저장)
   if coalesce(payload->>'visibility','private') = 'public' then
     insert into activities(user_id, type, payload) values (
       uid, 'run_completed',
@@ -123,43 +157,14 @@ begin
   end if;
 
   return jsonb_build_object(
-    'runId', new_run_id,
-    'newRegions', new_regions,
-    'gradeUps', grade_ups,
-    'themeDelta', theme_delta,
-    'newTitles', new_titles
-  );
+    'runId', new_run_id, 'newRegions', new_regions, 'gradeUps', grade_ups,
+    'themeDelta', theme_delta, 'newTitles', new_titles);
 end;
 $$;
 
--- 크루 생성: 크루 + 소유자 멤버십을 한 번에 만들고 크루를 반환
-create or replace function create_crew(crew_name text)
-returns crews
-language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); c crews;
-begin
-  if uid is null then raise exception 'unauthenticated'; end if;
-  insert into crews(name, owner_id) values (crew_name, uid) returning * into c;
-  insert into crew_members(crew_id, user_id, role) values (c.id, uid, 'owner');
-  return c;
-end; $$;
-
--- 크루 가입: 가입 코드로 크루를 찾아 멤버로 추가하고 크루를 반환
-create or replace function join_crew(code text)
-returns crews
-language plpgsql security definer set search_path = public as $$
-declare uid uuid := auth.uid(); c crews;
-begin
-  if uid is null then raise exception 'unauthenticated'; end if;
-  select * into c from crews where join_code = lower(code);
-  if c.id is null then raise exception 'crew not found'; end if;
-  insert into crew_members(crew_id, user_id) values (c.id, uid)
-    on conflict do nothing;
-  return c;
-end; $$;
-
--- 과거 런 공개/비공개 전환 — 본인 런만. 공개 시 피드 활동 생성(중복 방지), 비공개 시 제거.
-create or replace function set_run_visibility(p_run_id uuid, p_visibility text)
+-- F) 과거 런 게시/수정 RPC — 공개여부 + 글 + 태그 한 번에 --------
+create or replace function update_run_post(
+  p_run_id uuid, p_visibility text, p_caption text, p_tags text[])
 returns void
 language plpgsql security definer set search_path = public as $$
 declare uid uuid := auth.uid(); r runs;
@@ -167,20 +172,19 @@ begin
   if uid is null then raise exception 'unauthenticated'; end if;
   if p_visibility not in ('public','private') then raise exception 'bad visibility'; end if;
 
-  update runs set visibility = p_visibility
+  update runs set visibility = p_visibility,
+                  caption = nullif(p_caption,''),
+                  tags = coalesce(p_tags, '{}')
     where id = p_run_id and user_id = uid
     returning * into r;
   if r.id is null then raise exception 'run not found'; end if;
 
   if p_visibility = 'public' then
     insert into activities(user_id, type, payload)
-      select uid, 'run_completed',
-             jsonb_build_object('runId', r.id, 'distanceM', r.distance_m)
-      where not exists (
-        select 1 from activities a
+      select uid, 'run_completed', jsonb_build_object('runId', r.id, 'distanceM', r.distance_m)
+      where not exists (select 1 from activities a
         where a.user_id = uid and a.payload->>'runId' = r.id::text);
   else
-    delete from activities
-      where user_id = uid and payload->>'runId' = r.id::text;
+    delete from activities where user_id = uid and payload->>'runId' = r.id::text;
   end if;
 end; $$;

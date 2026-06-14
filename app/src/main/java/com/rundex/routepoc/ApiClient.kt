@@ -40,6 +40,26 @@ class ApiClient(
     fun patchMe(userId: String, body: JSONObject, cb: (Result<JSONObject>) -> Unit = {}) =
         sendArrayAsObject("PATCH", "/rest/v1/profiles?id=eq.$userId", body, cb)
 
+    /** 내 프로필 조회 — 닉네임/핸들/대표칭호 */
+    fun getProfile(userId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray("/rest/v1/profiles?id=eq.$userId&select=display_name,handle,rep_title_ids", cb)
+
+    /** 내 통계(서버 원천) — 발견동/러닝수/총거리/칭호수 */
+    fun getMyStats(cb: (Result<JSONObject>) -> Unit) =
+        postObject("/rest/v1/rpc/my_stats", JSONObject(), cb)
+
+    /** 도감 지도용 — 내가 발견한 동의 경계(GeoJSON)+누적거리 */
+    fun getMyDexGeo(userId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray("/rest/v1/my_dex_geo?user_id=eq.$userId&select=region_code,name,total_m,geojson", cb)
+
+    /** 특정 행정동에서 내가 뛴 런 목록 (RPC) */
+    fun getMyRunsInRegion(regionCode: String, cb: (Result<JSONArray>) -> Unit) {
+        val req = build("/rest/v1/rpc/my_runs_in_region")
+            ?.post(JSONObject().put("p_region_code", regionCode).toString().toRequestBody(jsonMedia))
+            ?.build() ?: return cb(skipped())
+        enqueue(req) { raw -> cb(raw.map { JSONArray(it) }) }
+    }
+
     // 추천 경로(Discover) — PostgREST 필터/정렬 쿼리
     fun listRoutes(query: String, cb: (Result<JSONArray>) -> Unit) =
         getArray("/rest/v1/routes?$query", cb)
@@ -48,9 +68,58 @@ class ApiClient(
     fun rateRoute(body: JSONObject, cb: (Result<JSONObject>) -> Unit) =
         sendArrayAsObject("POST", "/rest/v1/route_ratings", body, cb)
 
+    // 경로 북마크
+    fun addBookmark(userId: String, routeId: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendArrayAsObject(
+            "POST", "/rest/v1/route_bookmarks",
+            JSONObject().put("user_id", userId).put("route_id", routeId), cb
+        )
+    fun removeBookmark(userId: String, routeId: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendNoBody("DELETE", "/rest/v1/route_bookmarks?user_id=eq.$userId&route_id=eq.$routeId", cb)
+    fun listMyBookmarks(userId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray(
+            "/rest/v1/route_bookmarks?user_id=eq.$userId" +
+                "&select=route_id,routes(id,name,distance_m,difficulty)&order=created_at.desc", cb
+        )
+
     // 소셜
     fun getFeed(cb: (Result<JSONArray>) -> Unit) =
         getArray("/rest/v1/activities?select=*&order=created_at.desc&limit=50", cb)
+
+    /** 인스타형 홈 피드 — 공개 런 + 프로필 + 경로(GeoJSON), 최신순 */
+    fun getPublicFeed(cb: (Result<JSONArray>) -> Unit) =
+        getArray("/rest/v1/public_feed?order=created_at.desc&limit=50", cb)
+
+    /** 특정 사용자들(팔로잉)의 공개 런만 */
+    fun getFeedByUsers(userIds: List<String>, cb: (Result<JSONArray>) -> Unit) {
+        if (userIds.isEmpty()) return cb(Result.success(JSONArray()))
+        val inList = userIds.joinToString(",")
+        getArray("/rest/v1/public_feed?user_id=in.($inList)&order=created_at.desc&limit=50", cb)
+    }
+
+    /** 피드 좋아요 */
+    fun likeRun(runId: String, userId: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendArrayAsObject(
+            "POST", "/rest/v1/run_reactions",
+            JSONObject().put("run_id", runId).put("user_id", userId).put("emoji", "❤️"), cb
+        )
+    fun unlikeRun(runId: String, userId: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendNoBody("DELETE", "/rest/v1/run_reactions?run_id=eq.$runId&user_id=eq.$userId", cb)
+
+    /** 내 러닝 기록(서버) — 최신순. 공개여부·경로(GeoJSON)·캡션 포함 */
+    fun listMyRuns(userId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray(
+            "/rest/v1/runs?user_id=eq.$userId" +
+                "&select=id,started_at,distance_m,duration_ms,visibility,caption,geom" +
+                "&order=started_at.desc&limit=100", cb
+        )
+
+    /** 과거 런 공개/비공개 전환 (RPC) */
+    fun setRunVisibility(runId: String, visibility: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        postObject(
+            "/rest/v1/rpc/set_run_visibility",
+            JSONObject().put("p_run_id", runId).put("p_visibility", visibility), cb
+        )
 
     /** 핸들·이름으로 사용자 검색 (친구 찾기) */
     fun searchUsers(query: String, cb: (Result<JSONArray>) -> Unit) {
@@ -66,6 +135,10 @@ class ApiClient(
             "POST", "/rest/v1/follows",
             JSONObject().put("follower_id", followerId).put("followee_id", followeeId), cb
         )
+
+    /** 내가 팔로우 중인 사용자 id 목록 */
+    fun listFollowing(userId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray("/rest/v1/follows?follower_id=eq.$userId&select=followee_id", cb)
 
     fun unfollow(followerId: String, followeeId: String, cb: (Result<JSONObject>) -> Unit = {}) =
         sendNoBody(
@@ -88,6 +161,40 @@ class ApiClient(
         getArray("/rest/v1/crew_members?user_id=eq.$userId&select=role,crews(id,name,join_code)", cb)
     fun getCrewMembers(crewId: String, cb: (Result<JSONArray>) -> Unit) =
         getArray("/rest/v1/crew_members?crew_id=eq.$crewId&select=role,profiles(display_name,handle)", cb)
+
+    // 크루 커뮤니티 ──────────────────────────────────────────────
+    /** 추천(공개) 크루 목록 — 멤버수·가입여부 */
+    fun listPublicCrews(cb: (Result<JSONArray>) -> Unit) {
+        val req = build("/rest/v1/rpc/list_public_crews")
+            ?.post("{}".toRequestBody(jsonMedia))?.build() ?: return cb(skipped())
+        enqueue(req) { raw -> cb(raw.map { JSONArray(it) }) }
+    }
+    fun joinCrewById(crewId: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        postObject("/rest/v1/rpc/join_crew_by_id", JSONObject().put("p_crew_id", crewId), cb)
+    fun crewDetail(crewId: String, cb: (Result<JSONObject>) -> Unit) =
+        postObject("/rest/v1/rpc/crew_detail", JSONObject().put("p_crew_id", crewId), cb)
+    /** 활성 챌린지 — 없으면 null */
+    fun crewChallenge(crewId: String, cb: (Result<JSONObject?>) -> Unit) {
+        val req = build("/rest/v1/rpc/crew_challenge")
+            ?.post(JSONObject().put("p_crew_id", crewId).toString().toRequestBody(jsonMedia))?.build()
+            ?: return cb(skipped())
+        enqueue(req) { raw -> cb(raw.map { s -> if (s.isBlank() || s.trim() == "null") null else JSONObject(s) }) }
+    }
+    fun setCrewChallenge(crewId: String, title: String, targetKm: Double, days: Int, cb: (Result<JSONObject>) -> Unit = {}) =
+        postObject(
+            "/rest/v1/rpc/set_crew_challenge",
+            JSONObject().put("p_crew_id", crewId).put("p_title", title).put("p_target_km", targetKm).put("p_days", days), cb
+        )
+    fun getCrewMessages(crewId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray(
+            "/rest/v1/crew_messages?crew_id=eq.$crewId" +
+                "&select=text,created_at,profiles(display_name)&order=created_at.asc&limit=100", cb
+        )
+    fun postCrewMessage(crewId: String, userId: String, text: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendArrayAsObject(
+            "POST", "/rest/v1/crew_messages",
+            JSONObject().put("crew_id", crewId).put("user_id", userId).put("text", text), cb
+        )
 
     // ── 내부 HTTP 헬퍼 ────────────────────────────────────────────
 

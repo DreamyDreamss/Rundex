@@ -6,9 +6,20 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.BaseAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageView
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import com.google.android.gms.location.LocationServices
@@ -48,6 +59,17 @@ class MainActivity : Activity() {
     private var routeSource: GeoJsonSource? = null
     private var waypointSource: GeoJsonSource? = null
     private var meSource: GeoJsonSource? = null
+    private var searchSource: GeoJsonSource? = null
+
+    // 주소·장소 검색
+    private lateinit var searchInput: EditText
+    private lateinit var searchClear: ImageView
+    private lateinit var suggestionList: ListView
+    private val geocoding = GeocodingClient()
+    private val suggestionAdapter = SuggestionAdapter()
+    private val searchHandler = Handler(Looper.getMainLooper())
+    private var pendingSearch: Runnable? = null
+    private var suppressWatcher = false
 
     private val state = RouteState()
     private val routing = RoutingClient()
@@ -64,7 +86,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
         setContentView(R.layout.activity_main)
-        NavBar.setup(this, R.id.navPlan)
+        NavBar.setup(this, R.id.navRun)
+        RunSegment.setup(this, RunSegment.Tab.PLAN)
 
         statDistanceValue = findViewById(R.id.statDistanceValue)
         statTimeValue = findViewById(R.id.statTimeValue)
@@ -83,6 +106,7 @@ class MainActivity : Activity() {
         findViewById<View>(R.id.resetAction).setOnClickListener { confirmReset() }
         findViewById<ImageView>(R.id.myLocationButton).setOnClickListener { goToMyLocation() }
         findViewById<Button>(R.id.runRouteButton).setOnClickListener { saveCourse() }
+        setUpSearch()
 
         mapView = findViewById(R.id.mapView)
         mapView.onCreate(savedInstanceState)
@@ -128,6 +152,118 @@ class MainActivity : Activity() {
                 circleStrokeWidth(2f),
             )
         )
+        searchSource = GeoJsonSource("search-src").also(style::addSource)
+        style.addLayer(
+            CircleLayer("search-layer", "search-src").withProperties(
+                circleRadius(9f),
+                circleColor("#FF5A2D"),
+                circleStrokeColor("#FFFFFF"),
+                circleStrokeWidth(3f),
+            )
+        )
+    }
+
+    // ── 주소·장소 검색 (계획에서 위치 찾기) ──────────────────────────
+    private fun setUpSearch() {
+        searchInput = findViewById(R.id.searchInput)
+        searchClear = findViewById(R.id.searchClear)
+        suggestionList = findViewById(R.id.searchSuggestions)
+        suggestionList.adapter = suggestionAdapter
+
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, st: Int, c: Int, a: Int) {}
+            override fun onTextChanged(s: CharSequence?, st: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if (suppressWatcher) return
+                val q = s?.toString()?.trim().orEmpty()
+                searchClear.visibility = if (q.isEmpty()) View.GONE else View.VISIBLE
+                scheduleSearch(q)
+            }
+        })
+        searchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                pendingSearch?.let(searchHandler::removeCallbacks)
+                runSearch(searchInput.text.toString().trim())
+                true
+            } else false
+        }
+        searchClear.setOnClickListener {
+            searchInput.setText("")
+            hideSuggestions()
+        }
+        suggestionList.setOnItemClickListener { _, _, position, _ ->
+            moveToPlace(suggestionAdapter.getItem(position))
+        }
+    }
+
+    /** 입력 디바운스(350ms) 후 검색 — 2자 미만이면 추천 숨김 */
+    private fun scheduleSearch(query: String) {
+        pendingSearch?.let(searchHandler::removeCallbacks)
+        if (query.length < 2) { hideSuggestions(); return }
+        val task = Runnable { runSearch(query) }
+        pendingSearch = task
+        searchHandler.postDelayed(task, 350L)
+    }
+
+    private fun runSearch(query: String) {
+        if (query.length < 2) return
+        geocoding.search(query) { result ->
+            runOnUiThread {
+                result.onSuccess { places ->
+                    if (places.isEmpty()) {
+                        hideSuggestions()
+                        Toast.makeText(this, "검색 결과가 없습니다", Toast.LENGTH_SHORT).show()
+                    } else {
+                        suggestionAdapter.submit(places)
+                        suggestionList.visibility = View.VISIBLE
+                    }
+                }.onFailure {
+                    Toast.makeText(this, "검색 실패: 네트워크를 확인하세요", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    /** 선택한 장소로 카메라 이동 + 마커 표시, 키보드·추천 닫기 */
+    private fun moveToPlace(place: GeoPlace) {
+        searchSource?.setGeoJson(Point.fromLngLat(place.lon, place.lat))
+        map?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(place.lat, place.lon), 16.0))
+        suppressWatcher = true
+        searchInput.setText(place.name)
+        searchInput.setSelection(place.name.length)
+        suppressWatcher = false
+        hideSuggestions()
+        hideKeyboard()
+    }
+
+    private fun hideSuggestions() {
+        suggestionAdapter.submit(emptyList())
+        suggestionList.visibility = View.GONE
+    }
+
+    private fun hideKeyboard() {
+        searchInput.clearFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(searchInput.windowToken, 0)
+    }
+
+    /** 검색 추천 목록 어댑터 (📍 대표 이름 + 전체 주소) */
+    private inner class SuggestionAdapter : BaseAdapter() {
+        private val items = ArrayList<GeoPlace>()
+        fun submit(places: List<GeoPlace>) {
+            items.clear(); items.addAll(places); notifyDataSetChanged()
+        }
+        override fun getCount() = items.size
+        override fun getItem(position: Int) = items[position]
+        override fun getItemId(position: Int) = position.toLong()
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: LayoutInflater.from(this@MainActivity)
+                .inflate(R.layout.row_suggestion, parent, false)
+            val place = items[position]
+            view.findViewById<TextView>(R.id.suggestionName).text = place.name
+            view.findViewById<TextView>(R.id.suggestionAddress).text = place.displayName
+            return view
+        }
     }
 
     /** 스냅 켜기/끄기 — 켜짐: 도로 따라 라우팅, 꺼짐: 직선 연결 */
@@ -171,15 +307,43 @@ class MainActivity : Activity() {
         }
         PlannedRouteStore(java.io.File(filesDir, "data"))
             .save(PlannedRoute(path, state.totalDistanceMeters()))
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.RundexDialog)
             .setTitle("코스 저장됨")
-            .setMessage("${formatKm(state.totalDistanceMeters())} 코스를 저장했어요. 지금 따라 뛸까요?")
-            .setPositiveButton("뛰기") { _, _ ->
-                startActivity(
-                    Intent(this, TrackActivity::class.java).putExtra("follow", true)
-                )
+            .setMessage("${formatKm(state.totalDistanceMeters())} 코스를 저장했어요.\n따라 뛰거나 추천 코스로 공유할 수 있어요.")
+            .setPositiveButton("🏃 따라 뛰기") { _, _ ->
+                startActivity(Intent(this, TrackActivity::class.java).putExtra("follow", true))
             }
-            .setNegativeButton("나중에", null)
+            .setNeutralButton("📣 추천에 공유") { _, _ -> shareCoursePrompt(path) }
+            .setNegativeButton("닫기", null)
+            .show()
+    }
+
+    /** 계획 코스를 추천(공개) 코스로 등록 — 출발지 보호 후 업로드 */
+    private fun shareCoursePrompt(path: List<LatLngPoint>) {
+        if (!ApiConfig.enabled) {
+            Toast.makeText(this, "서버 연결 후 공유할 수 있어요", Toast.LENGTH_SHORT).show(); return
+        }
+        val km = String.format(Locale.US, "%.1f", state.totalDistanceMeters() / 1000.0)
+        val input = EditText(this).apply { hint = "코스 이름 (예: 한강 야경 ${km}km)" }
+        AlertDialog.Builder(this, R.style.RundexDialog)
+            .setTitle("📣 추천 코스로 공유")
+            .setMessage("다른 러너들이 이 코스를 불러와 달릴 수 있어요. (출발·도착 주변은 보호돼요)")
+            .setView(input)
+            .setPositiveButton("공유") { _, _ ->
+                val name = input.text.toString().trim().ifEmpty { "내 코스 ${km}km" }
+                val safe = RoutePrivacy.trimEnds(path)
+                val ewkt = "SRID=4326;LINESTRING(" + safe.joinToString(", ") { "${it.lon} ${it.lat}" } + ")"
+                val body = org.json.JSONObject()
+                    .put("name", name).put("distance_m", state.totalDistanceMeters())
+                    .put("difficulty", 2).put("geom", ewkt).put("is_public", true)
+                ApiClient(Session(this)).createRoute(body) { r ->
+                    runOnUiThread {
+                        r.onSuccess { Toast.makeText(this, "추천 코스로 공유했어요! 러닝 탭 추천에서 볼 수 있어요", Toast.LENGTH_LONG).show() }
+                            .onFailure { Toast.makeText(this, "공유 실패: ${it.message}", Toast.LENGTH_SHORT).show() }
+                    }
+                }
+            }
+            .setNegativeButton("취소", null)
             .show()
     }
 
@@ -310,7 +474,7 @@ class MainActivity : Activity() {
     override fun onPause() { super.onPause(); mapView.onPause() }
     override fun onStop() { super.onStop(); mapView.onStop() }
     override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory() }
-    override fun onDestroy() { super.onDestroy(); mapView.onDestroy() }
+    override fun onDestroy() { super.onDestroy(); mapView.onDestroy(); searchHandler.removeCallbacksAndMessages(null) }
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         mapView.onSaveInstanceState(outState)

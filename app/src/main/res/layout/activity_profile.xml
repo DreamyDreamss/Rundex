@@ -51,6 +51,14 @@
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/profileHandle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:textColor="@color/textGrey"
+                        android:textSize="13sp" />
+
+                    <TextView
                         android:id="@+id/profileTitle"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
@@ -127,6 +135,48 @@
                     android:textSize="14sp" />
             </LinearLayout>
 
+            <!-- 이번 주 + 소셜 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/card_bg"
+                android:elevation="2dp"
+                android:orientation="horizontal"
+                android:paddingTop="18dp"
+                android:paddingBottom="18dp">
+
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                    <TextView android:id="@+id/weekDistance" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="0.0 km" android:textColor="@color/primary" android:textSize="18sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp" android:text="이번 주 거리" android:textColor="@color/textGrey" android:textSize="12sp" />
+                </LinearLayout>
+
+                <View android:layout_width="1dp" android:layout_height="32dp"
+                    android:layout_gravity="center_vertical" android:background="@color/divider" />
+
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                    <TextView android:id="@+id/weekRuns" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="0회" android:textColor="@color/textDark" android:textSize="18sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp" android:text="이번 주 러닝" android:textColor="@color/textGrey" android:textSize="12sp" />
+                </LinearLayout>
+
+                <View android:layout_width="1dp" android:layout_height="32dp"
+                    android:layout_gravity="center_vertical" android:background="@color/divider" />
+
+                <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+                    android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+                    <TextView android:id="@+id/statFollow" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:text="0 · 0" android:textColor="@color/textDark" android:textSize="18sp" android:textStyle="bold" />
+                    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp" android:text="팔로워·팔로잉" android:textColor="@color/textGrey" android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
             <!-- 메뉴 -->
             <Button
                 android:id="@+id/openTitlesButton"
@@ -154,7 +204,7 @@
                 android:layout_height="54dp"
                 android:layout_marginTop="10dp"
                 android:background="@drawable/btn_secondary"
-                android:text="🧭  추천 코스"
+                android:text="🔖  북마크한 코스"
                 android:textColor="@color/textDark"
                 android:textSize="15sp" />
 

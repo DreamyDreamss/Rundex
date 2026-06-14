@@ -46,7 +46,7 @@ class ThemeDexActivity : Activity() {
     private fun showChecklist(col: ThemeCollection) {
         val got = store.collected(col.slug)
         val items = col.places.map { (if (it.id in got) "✅ " else "🔒 ") + it.name }.toTypedArray()
-        AlertDialog.Builder(this)
+        AlertDialog.Builder(this, R.style.RundexDialog)
             .setTitle("${col.emoji} ${col.title}  ${got.size}/${col.places.size}")
             .setItems(items, null)
             .setPositiveButton("닫기", null)

@@ -9,13 +9,13 @@ object NavBar {
 
     fun setup(activity: Activity, currentNavId: Int) {
         val tabs = mapOf(
-            R.id.navPlan to MainActivity::class.java,
+            R.id.navFeed to FeedActivity::class.java,
             R.id.navRun to TrackActivity::class.java,
             R.id.navDex to DexActivity::class.java,
             R.id.navProfile to ProfileActivity::class.java,
         )
         val labels = mapOf(
-            R.id.navPlan to R.id.navPlanLabel,
+            R.id.navFeed to R.id.navFeedLabel,
             R.id.navRun to R.id.navRunLabel,
             R.id.navDex to R.id.navDexLabel,
             R.id.navProfile to R.id.navProfileLabel,
