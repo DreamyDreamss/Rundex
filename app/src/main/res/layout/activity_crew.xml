@@ -13,7 +13,7 @@
         android:background="@drawable/card_bg"
         android:elevation="2dp"
         android:padding="20dp"
-        android:text="👥 내 크루"
+        android:text="👥 크루"
         android:textColor="@color/textDark"
         android:textSize="20sp"
         android:textStyle="bold" />
