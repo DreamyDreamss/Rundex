@@ -186,6 +186,21 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- 연속 러닝 스트릭 배너 (streak>0 일 때만) -->
+            <TextView
+                android:id="@+id/streakBanner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:background="@drawable/chip_bg"
+                android:gravity="center"
+                android:paddingTop="14dp"
+                android:paddingBottom="14dp"
+                android:textColor="@color/primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
             <!-- 메뉴 -->
             <Button
                 android:id="@+id/openTitlesButton"

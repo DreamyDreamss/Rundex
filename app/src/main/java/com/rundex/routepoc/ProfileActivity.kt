@@ -117,6 +117,13 @@ class ProfileActivity : Activity() {
                         findViewById<TextView>(R.id.weekRuns).text = "${o.optInt("weekRuns")}회"
                         findViewById<TextView>(R.id.statFollow).text =
                             "${o.optInt("followers")} · ${o.optInt("following")}"
+                        val streak = o.optInt("streak")
+                        findViewById<TextView>(R.id.streakBanner).apply {
+                            if (streak > 0) {
+                                text = "🔥 ${streak}일 연속 러닝 중!"
+                                visibility = android.view.View.VISIBLE
+                            } else visibility = android.view.View.GONE
+                        }
                     }
                 }
             }
