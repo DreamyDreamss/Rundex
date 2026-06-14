@@ -418,13 +418,12 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             btnPub.setBackgroundResource(R.drawable.btn_secondary); btnPub.setTextColor(getColor(R.color.textDark))
         }
         btnPriv.setOnClickListener {
-            submitRunToServer(track, "private", "", emptyList())
-            dialog.dismiss(); showRunResult(track, ach)
+            dialog.dismiss(); submitWithQueue(track, "private", "", emptyList(), ach)
         }
         btnPub.setOnClickListener {
-            submitRunToServer(track, "public",
-                captionInput.text.toString().trim(), parseTags(tagsInput.text.toString()))
-            dialog.dismiss(); showRunResult(track, ach)
+            dialog.dismiss()
+            submitWithQueue(track, "public",
+                captionInput.text.toString().trim(), parseTags(tagsInput.text.toString()), ach)
         }
         dialog.show()
     }
@@ -475,24 +474,78 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     private fun parseTags(raw: String): List<String> =
         raw.split(Regex("[\\s,#]+")).map { it.trim() }.filter { it.isNotEmpty() }.take(8)
 
-    /** 러닝을 서버에 업로드(best-effort). ApiConfig 미설정 시 조용히 무시됨. */
-    private fun submitRunToServer(track: SavedTrack, visibility: String, caption: String, tags: List<String>) {
-        runCatching {
-            val coords = org.json.JSONArray()
-            track.points.forEach { p ->
-                coords.put(org.json.JSONArray().put(p.lon).put(p.lat))
+    private fun pendingStore() = PendingUploadStore(File(filesDir, "data"))
+
+    /**
+     * 러닝 업로드 — 큐에 적재 후 서버 전송. 성공 시 **서버가 권위 계산한 결과**(새 동·승급·칭호)로
+     * 결과화면을 띄우고 큐에서 제거. 실패(오프라인/토큰만료) 시 로컬 추정 결과 + 자동 동기화 안내.
+     */
+    private fun submitWithQueue(
+        track: SavedTrack, visibility: String, caption: String, tags: List<String>, localAch: List<String>,
+    ) {
+        if (!ApiConfig.enabled) { showRunResult(track, localAch); return }
+        val coords = org.json.JSONArray()
+        track.points.forEach { p -> coords.put(org.json.JSONArray().put(p.lon).put(p.lat)) }
+        val payload = org.json.JSONObject()
+            .put("startedAt", track.startedAtMs)
+            .put("endedAt", track.startedAtMs + track.durationMs)
+            .put("distanceM", track.distanceMeters)
+            .put("durationMs", track.durationMs)
+            .put("source", if (plannedRoute != null) "follow" else "free")
+            .put("visibility", visibility)
+            .put("caption", caption)
+            .put("tags", org.json.JSONArray(tags))
+            .put("coordinates", coords)
+        val store = pendingStore()
+        val localId = store.add(payload)
+        ApiClient(Session(this)).submitRun(payload) { r ->
+            runOnUiThread {
+                r.onSuccess { o ->
+                    store.remove(localId)
+                    showRunResult(track, serverAch(o))
+                }.onFailure {
+                    val offline = localAch + "⏳ 오프라인 저장됨 — 연결되면 자동으로 올라가요"
+                    showRunResult(track, offline)
+                }
             }
-            val body = org.json.JSONObject()
-                .put("startedAt", track.startedAtMs)
-                .put("endedAt", track.startedAtMs + track.durationMs)
-                .put("distanceM", track.distanceMeters)
-                .put("durationMs", track.durationMs)
-                .put("source", if (plannedRoute != null) "follow" else "free")
-                .put("visibility", visibility)
-                .put("caption", caption)
-                .put("tags", org.json.JSONArray(tags))
-                .put("coordinates", coords)
-            ApiClient(Session(this)).submitRun(body)
+        }
+    }
+
+    /** submit_run 서버 응답(권위) → 성취 라인 */
+    private fun serverAch(o: org.json.JSONObject): List<String> {
+        val ach = ArrayList<String>()
+        o.optJSONArray("newRegions")?.takeIf { it.length() > 0 }?.let { nr ->
+            val names = (0 until nr.length()).joinToString(", ") { nr.getJSONObject(it).optString("name") }
+            ach.add("🗺 새 동 ${nr.length()}곳 발견 — $names")
+        }
+        o.optJSONArray("gradeUps")?.let { g ->
+            for (i in 0 until g.length()) {
+                val e = g.getJSONObject(i)
+                ach.add("⬆ ${e.optString("name")} ${gradeKo(e.optString("from"))} → ${gradeKo(e.optString("to"))} 승급!")
+            }
+        }
+        o.optJSONArray("newTitles")?.let { t ->
+            for (i in 0 until t.length()) ach.add("🏅 칭호 획득 — ${t.getJSONObject(i).optString("name")}")
+        }
+        o.optJSONArray("themeDelta")?.let { th ->
+            for (i in 0 until th.length()) ach.add("🌟 테마 +1 (${th.getJSONObject(i).optString("place")})")
+        }
+        return ach
+    }
+
+    private fun gradeKo(g: String) = when (g.lowercase()) {
+        "card" -> "발견"; "bronze" -> "브론즈"; "silver" -> "실버"; "gold" -> "골드"; else -> g
+    }
+
+    /** 미업로드 러닝 재시도 — 앱 재개 시 호출 */
+    private fun flushPending() {
+        if (!ApiConfig.enabled || Session(this).userId == null) return
+        val store = pendingStore()
+        val items = store.all()
+        if (items.isEmpty()) return
+        val api = ApiClient(Session(this))
+        items.forEach { (localId, payload) ->
+            api.submitRun(payload) { r -> r.onSuccess { store.remove(localId) } }
         }
     }
 
@@ -795,7 +848,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         ticker.removeCallbacks(tick)
     }
 
-    override fun onResume() { super.onResume(); mapView.onResume() }
+    override fun onResume() { super.onResume(); mapView.onResume(); flushPending() }
     override fun onPause() { super.onPause(); mapView.onPause() }
     override fun onLowMemory() { super.onLowMemory(); mapView.onLowMemory() }
     override fun onDestroy() {

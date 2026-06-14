@@ -150,7 +150,17 @@ class ProfileActivity : Activity() {
         val uid = Session(this).userId
         if (!ApiConfig.enabled || uid == null) return
         ApiClient(Session(this)).listMyRuns(uid) { r ->
-            runOnUiThread { r.onSuccess { allRuns = it; renderPosts(it) } }
+            runOnUiThread {
+                r.onSuccess { allRuns = it; renderPosts(it) }
+                    .onFailure {
+                        // 무음 빈 상태 방지 — 실패를 명확히 안내
+                        if (allRuns.length() == 0) {
+                            val empty = findViewById<TextView>(R.id.postsEmpty)
+                            empty.text = "기록을 불러오지 못했어요.\n연결을 확인하고 다시 들어와주세요."
+                            empty.visibility = View.VISIBLE
+                        }
+                    }
+            }
         }
     }
 
