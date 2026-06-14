@@ -127,6 +127,8 @@ class FeedActivity : Activity() {
         super.onResume()
         load()
         refreshNotifBadge()
+        // 미업로드 러닝이 있으면 올리고, 올라가면 피드 새로고침
+        UploadFlusher.flush(this) { runOnUiThread { load() } }
     }
 
     private val isoFmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)

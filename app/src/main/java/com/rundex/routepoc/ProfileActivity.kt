@@ -62,6 +62,7 @@ class ProfileActivity : Activity() {
         super.onResume()
         refresh()
         loadPosts()
+        UploadFlusher.flush(this) { runOnUiThread { refresh(); loadPosts() } }
     }
 
     private fun refresh() {

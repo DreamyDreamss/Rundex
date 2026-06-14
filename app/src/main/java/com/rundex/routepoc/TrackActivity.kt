@@ -613,16 +613,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     }
 
     /** 미업로드 러닝 재시도 — 앱 재개 시 호출 */
-    private fun flushPending() {
-        if (!ApiConfig.enabled || Session(this).userId == null) return
-        val store = pendingStore()
-        val items = store.all()
-        if (items.isEmpty()) return
-        val api = ApiClient(Session(this))
-        items.forEach { (localId, payload) ->
-            api.submitRun(payload) { r -> r.onSuccess { store.remove(localId) } }
-        }
-    }
+    private fun flushPending() = UploadFlusher.flush(this)
 
 
     private fun hasPermissions(): Boolean =
