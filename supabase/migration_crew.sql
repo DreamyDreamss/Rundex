@@ -99,3 +99,34 @@ begin
   insert into crew_goals(crew_id, kind, target, progress, period_start, period_end, title)
     values (p_crew_id, 'distance', p_target_km * 1000, 0, current_date, current_date + p_days, p_title);
 end; $$;
+
+-- [2026-06] crew_challenge 에 기여도 리더보드(contributors) 추가 — 멤버별 누적 km
+create or replace function crew_challenge(p_crew_id uuid)
+returns jsonb language sql security definer set search_path to 'public' as $function$
+  with g as (
+    select * from crew_goals where crew_id = p_crew_id
+    order by coalesce(period_end, date '2999-01-01') desc limit 1
+  )
+  select case when (select id from g) is null then null else (
+    select jsonb_build_object(
+      'title', coalesce(g.title, '크루 챌린지'),
+      'targetM', g.target,
+      'progressM', coalesce((
+        select sum(r.distance_m) from runs r
+        join crew_members m on m.user_id = r.user_id
+        where m.crew_id = p_crew_id
+          and (g.period_start is null or r.started_at >= g.period_start)
+          and (g.period_end is null or r.started_at < g.period_end + interval '1 day')), 0),
+      'periodEnd', g.period_end,
+      'contributors', coalesce((
+        select jsonb_agg(jsonb_build_object('name', p.display_name, 'm', sub.m) order by sub.m desc)
+        from (
+          select r.user_id, sum(r.distance_m) m from runs r
+          join crew_members mm on mm.user_id = r.user_id
+          where mm.crew_id = p_crew_id
+            and (g.period_start is null or r.started_at >= g.period_start)
+            and (g.period_end is null or r.started_at < g.period_end + interval '1 day')
+          group by r.user_id
+        ) sub join profiles p on p.id = sub.user_id), '[]'))
+    from g) end;
+$function$;

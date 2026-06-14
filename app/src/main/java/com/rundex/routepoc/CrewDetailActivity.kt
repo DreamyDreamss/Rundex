@@ -95,6 +95,8 @@ class CrewDetailActivity : Activity() {
                     val title = findViewById<TextView>(R.id.challengeTitle)
                     val text = findViewById<TextView>(R.id.challengeProgressText)
                     val bar = findViewById<ProgressBar>(R.id.challengeBar)
+                    val board = findViewById<android.widget.LinearLayout>(R.id.challengeContributors)
+                    board.removeAllViews()
                     if (o == null) {
                         title.text = "🏁 진행 중인 챌린지 없음"
                         text.text = "멤버라면 '설정'으로 챌린지를 만들어보세요"
@@ -106,9 +108,43 @@ class CrewDetailActivity : Activity() {
                         text.text = "${String.format(Locale.US, "%.1f", prog)} / ${String.format(Locale.US, "%.0f", target)} km" +
                             (o.optString("periodEnd").takeIf { it.isNotBlank() && it != "null" }?.let { " · ~$it" } ?: "")
                         bar.progress = if (target > 0) (prog / target * 1000).toInt().coerceIn(0, 1000) else 0
+                        renderContributors(board, o.optJSONArray("contributors"))
                     }
                 }
             }
+        }
+    }
+
+    /** 챌린지 기여도 리더보드 — 멤버별 누적 km (상위 5명, 1·2·3위 메달) */
+    private fun renderContributors(board: android.widget.LinearLayout, arr: org.json.JSONArray?) {
+        if (arr == null || arr.length() == 0) return
+        val dp = resources.displayMetrics.density
+        fun px(v: Int) = (v * dp).toInt()
+        board.addView(TextView(this).apply {
+            text = "🏆 기여 순위"
+            setTextColor(getColor(R.color.textGrey)); textSize = 12f
+            setPadding(0, px(2), 0, px(4))
+        })
+        val medals = listOf("🥇", "🥈", "🥉")
+        for (i in 0 until minOf(arr.length(), 5)) {
+            val c = arr.getJSONObject(i)
+            val km = c.optDouble("m") / 1000.0
+            val rank = if (i < 3) medals[i] else "${i + 1}."
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                setPadding(0, px(4), 0, px(4))
+            }
+            row.addView(TextView(this).apply {
+                text = "$rank  ${c.optString("name").ifBlank { "러너" }}"
+                setTextColor(getColor(R.color.textDark)); textSize = 14f
+                layoutParams = android.widget.LinearLayout.LayoutParams(0, -2, 1f)
+            })
+            row.addView(TextView(this).apply {
+                text = String.format(Locale.US, "%.1f km", km)
+                setTextColor(getColor(R.color.primary)); textSize = 14f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            board.addView(row)
         }
     }
 

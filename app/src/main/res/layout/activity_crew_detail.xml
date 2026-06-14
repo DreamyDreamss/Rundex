@@ -100,6 +100,14 @@
             android:layout_marginTop="8dp"
             android:max="1000"
             android:progressTint="@color/primary" />
+
+        <!-- 기여도 리더보드 (코드로 채움) -->
+        <LinearLayout
+            android:id="@+id/challengeContributors"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="vertical" />
     </LinearLayout>
 
     <!-- 채팅 -->
