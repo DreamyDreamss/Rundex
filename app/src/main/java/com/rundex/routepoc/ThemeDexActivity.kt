@@ -27,28 +27,56 @@ class ThemeDexActivity : Activity() {
             "🌟 테마 도감 ${collectedTotal} / ${totalPlaces}\n완성한 컬렉션 ${done} / ${collections.size}"
 
         val list = findViewById<ListView>(R.id.themeList)
-        list.adapter = object : ArrayAdapter<ThemeCollection>(this, R.layout.row_dex, collections) {
+        list.adapter = object : ArrayAdapter<ThemeCollection>(this, R.layout.row_theme, collections) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                val v = convertView ?: layoutInflater.inflate(R.layout.row_dex, parent, false)
+                val v = convertView ?: layoutInflater.inflate(R.layout.row_theme, parent, false)
                 val col = getItem(position)!!
                 val n = store.collected(col.slug).size
-                val complete = n >= col.places.size
-                v.findViewById<TextView>(R.id.rowTitle).text =
-                    "${col.emoji} ${col.title}  $n/${col.places.size}" + if (complete) "  🏆" else ""
-                v.findViewById<TextView>(R.id.rowSub).text =
-                    if (complete) "완성! ${col.desc}" else col.desc
+                val total = col.places.size
+                val complete = n >= total
+                v.findViewById<TextView>(R.id.themeIcon).text = col.emoji
+                v.findViewById<TextView>(R.id.themeTitle).text = col.title + if (complete) "  🏆" else ""
+                v.findViewById<TextView>(R.id.themeCount).text = "$n/$total"
+                v.findViewById<TextView>(R.id.themeDesc).text = if (complete) "완성! ${col.desc}" else col.desc
+                v.findViewById<android.widget.ProgressBar>(R.id.themeBar).progress =
+                    if (total > 0) (n * 1000 / total) else 0
                 return v
             }
         }
         list.setOnItemClickListener { _, _, pos, _ -> showChecklist(collections[pos]) }
     }
 
+    /** 컬렉션 장소 체크리스트 — 수집/미수집을 카드 행으로 */
     private fun showChecklist(col: ThemeCollection) {
         val got = store.collected(col.slug)
-        val items = col.places.map { (if (it.id in got) "✅ " else "🔒 ") + it.name }.toTypedArray()
+        val dp = resources.displayMetrics.density
+        fun px(v: Int) = (v * dp).toInt()
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(px(20), px(8), px(20), px(8))
+        }
+        col.places.forEach { place ->
+            val collected = place.id in got
+            val row = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(0, px(8), 0, px(8))
+            }
+            row.addView(TextView(this).apply {
+                text = if (collected) "✅" else "🔒"; textSize = 18f
+                setPadding(0, 0, px(12), 0)
+            })
+            row.addView(TextView(this).apply {
+                text = place.name; textSize = 15f
+                setTextColor(getColor(if (collected) R.color.textDark else R.color.textGrey))
+                if (collected) setTypeface(typeface, android.graphics.Typeface.BOLD)
+            })
+            box.addView(row)
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(box) }
         AlertDialog.Builder(this, R.style.RundexDialog)
             .setTitle("${col.emoji} ${col.title}  ${got.size}/${col.places.size}")
-            .setItems(items, null)
+            .setView(scroll)
             .setPositiveButton("닫기", null)
             .show()
     }
