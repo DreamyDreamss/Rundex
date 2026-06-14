@@ -61,6 +61,7 @@ class ProfileActivity : Activity() {
                     val o = arr.optJSONObject(0) ?: return@onSuccess
                     val name = o.optString("display_name")
                     val handle = o.optString("handle")
+                    val bio = o.optString("bio")
                     runOnUiThread {
                         if (localName == null && name.isNotBlank() && name != "null") {
                             prefs.edit().putString("name", name).apply()
@@ -68,6 +69,10 @@ class ProfileActivity : Activity() {
                         }
                         findViewById<TextView>(R.id.profileHandle).text =
                             if (handle.isNotBlank() && handle != "null") "@$handle" else "@아이디 설정하기"
+                        findViewById<TextView>(R.id.profileBio).apply {
+                            if (bio.isNotBlank() && bio != "null") { text = bio; visibility = android.view.View.VISIBLE }
+                            else visibility = android.view.View.GONE
+                        }
                     }
                 }
             }
@@ -122,16 +127,22 @@ class ProfileActivity : Activity() {
         val view = layoutInflater.inflate(R.layout.dialog_edit_name, null)
         val input = view.findViewById<EditText>(R.id.nameInput)
         val handleInput = view.findViewById<EditText>(R.id.handleInput)
+        val bioInput = view.findViewById<EditText>(R.id.bioInput)
         input.setText(getSharedPreferences("profile", MODE_PRIVATE).getString("name", "러너"))
         input.setSelection(input.text.length)
 
         val session = Session(this)
-        // 현재 핸들 채워넣기
+        // 현재 핸들·소개 채워넣기
         session.userId?.let { uid ->
             ApiClient(session).getProfile(uid) { r ->
                 r.onSuccess { arr ->
-                    val h = arr.optJSONObject(0)?.optString("handle")
-                    if (!h.isNullOrBlank() && h != "null") runOnUiThread { handleInput.setText(h) }
+                    val o = arr.optJSONObject(0) ?: return@onSuccess
+                    val h = o.optString("handle")
+                    val bio = o.optString("bio")
+                    runOnUiThread {
+                        if (!h.isNullOrBlank() && h != "null") handleInput.setText(h)
+                        if (bio.isNotBlank() && bio != "null") bioInput.setText(bio)
+                    }
                 }
             }
         }
@@ -145,10 +156,11 @@ class ProfileActivity : Activity() {
             val name = input.text.toString().trim().ifEmpty { "러너" }
             // 핸들 정제: 소문자 영문·숫자·_, 3~20자
             val handle = handleInput.text.toString().trim().lowercase().replace(Regex("[^a-z0-9_]"), "")
+            val bio = bioInput.text.toString().trim().take(80)
             getSharedPreferences("profile", MODE_PRIVATE).edit().putString("name", name).apply()
             refresh()
             session.userId?.let { uid ->
-                val body = org.json.JSONObject().put("display_name", name)
+                val body = org.json.JSONObject().put("display_name", name).put("bio", bio)
                 if (handle.length in 3..20) body.put("handle", handle)
                 ApiClient(session).patchMe(uid, body) { r ->
                     runOnUiThread {

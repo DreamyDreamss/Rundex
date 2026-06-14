@@ -46,7 +46,7 @@ class ApiClient(
 
     /** 내 프로필 조회 — 닉네임/핸들/대표칭호 */
     fun getProfile(userId: String, cb: (Result<JSONArray>) -> Unit) =
-        getArray("/rest/v1/profiles?id=eq.$userId&select=display_name,handle,rep_title_ids", cb)
+        getArray("/rest/v1/profiles?id=eq.$userId&select=display_name,handle,bio,rep_title_ids", cb)
 
     /** 내 통계(서버 원천) — 발견동/러닝수/총거리/칭호수 */
     fun getMyStats(cb: (Result<JSONObject>) -> Unit) =
