@@ -37,6 +37,7 @@ class FeedAdapter(
     private val onOpen: (Int) -> Unit = {},
     private val onOpenProfile: (Int) -> Unit = {},
     private val onOpenComments: (Int) -> Unit = {},
+    private val onBookmark: (Int) -> Unit = {},
 ) : ArrayAdapter<FeedItem>(activity, R.layout.row_feed, items) {
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
@@ -55,6 +56,7 @@ class FeedAdapter(
             text = "💬 ${it.commentCount}"
             setOnClickListener { onOpenComments(position) }
         }
+        v.findViewById<TextView>(R.id.feedBookmark).setOnClickListener { onBookmark(position) }
         v.findViewById<TextView>(R.id.feedName).text = it.name
         v.findViewById<TextView>(R.id.feedWhen).text = it.whenText
         v.findViewById<TextView>(R.id.feedChip).text = it.chip

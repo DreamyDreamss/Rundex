@@ -19,7 +19,7 @@ class FeedActivity : Activity() {
         NavBar.setup(this, R.id.navFeed)
 
         adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRunDetail(pos) },
-            { pos -> openProfile(pos) }, { pos -> openComments(pos) })
+            { pos -> openProfile(pos) }, { pos -> openComments(pos) }, { pos -> bookmarkRun(pos) })
         findViewById<ListView>(R.id.feedList).adapter = adapter
         findViewById<TextView>(R.id.feedTabAll).setOnClickListener { switchTab(false) }
         findViewById<TextView>(R.id.feedTabFollowing).setOnClickListener { switchTab(true) }
@@ -82,7 +82,31 @@ class FeedActivity : Activity() {
     /** 피드 카드 💬 → 댓글 다이얼로그 (작성 후 피드 새로고침으로 카운트 갱신) */
     private fun openComments(pos: Int) {
         if (pos >= items.size) return
-        CommentsDialog.show(this, items[pos].runId) { load() }
+        CommentsDialog.show(this, items[pos].runId, items[pos].name) { load() }
+    }
+
+    /** 피드 카드 🔖 → 그 경로를 내 코스(비공개)로 만들어 코스 보관함에 저장 */
+    private fun bookmarkRun(pos: Int) {
+        if (pos >= items.size) return
+        val it = items[pos]
+        val uid = Session(this).userId ?: return
+        if (it.route.size < 2) {
+            android.widget.Toast.makeText(this, "이 게시물엔 경로가 없어요", android.widget.Toast.LENGTH_SHORT).show(); return
+        }
+        val ewkt = "SRID=4326;LINESTRING(" + it.route.joinToString(", ") { p -> "${p[0]} ${p[1]}" } + ")"
+        val name = it.caption.takeIf { c -> c.isNotBlank() }
+            ?: "${it.name}님의 코스 ${String.format(java.util.Locale.US, "%.1f", it.distanceM / 1000.0)}km"
+        val body = org.json.JSONObject()
+            .put("name", name).put("distance_m", it.distanceM)
+            .put("difficulty", 2).put("geom", ewkt).put("is_public", false)
+        val api = ApiClient(Session(this))
+        api.createRoute(body) { r ->
+            r.onSuccess { route ->
+                api.addBookmark(uid, route.optString("id")) {
+                    runOnUiThread { android.widget.Toast.makeText(this, "코스 보관함에 저장했어요 🔖", android.widget.Toast.LENGTH_SHORT).show() }
+                }
+            }.onFailure { runOnUiThread { android.widget.Toast.makeText(this, "저장 실패", android.widget.Toast.LENGTH_SHORT).show() } }
+        }
     }
 
     /** 좋아요 토글 — 낙관적 갱신 후 서버 반영 */

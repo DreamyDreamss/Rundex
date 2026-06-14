@@ -2,8 +2,14 @@ package com.rundex.routepoc
 
 import android.app.Activity
 import android.app.Dialog
+import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.view.Gravity
 import android.widget.EditText
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -13,13 +19,14 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-/** 러닝 댓글 다이얼로그 — 목록 + 입력. 피드/프로필에서 💬 탭 시 호출. */
+/** 인스타형 댓글 바텀시트 — 아바타·이름·시간·텍스트·답글 + 이모지 퀵바 + 입력. */
 object CommentsDialog {
 
     private val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
         .apply { timeZone = TimeZone.getTimeZone("UTC") }
+    private val QUICK = listOf("❤️", "😭", "👏", "🥹", "😍", "😮", "😂", "🙌")
 
-    fun show(activity: Activity, runId: String, onChanged: () -> Unit = {}) {
+    fun show(activity: Activity, runId: String, authorName: String? = null, onChanged: () -> Unit = {}) {
         if (!ApiConfig.enabled) {
             Toast.makeText(activity, "서버 연결 후 사용할 수 있어요", Toast.LENGTH_SHORT).show(); return
         }
@@ -28,55 +35,81 @@ object CommentsDialog {
 
         val root = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundResource(R.drawable.dialog_bg)
-            setPadding(px(20), px(18), px(20), px(14))
+            setBackgroundResource(R.drawable.sheet_bg)
         }
+        // 드래그 핸들
+        root.addView(android.view.View(activity).apply {
+            setBackgroundColor(0xFFD0D0D5.toInt())
+            layoutParams = LinearLayout.LayoutParams(px(40), px(4)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL; topMargin = px(10); bottomMargin = px(8)
+            }
+        })
         root.addView(TextView(activity).apply {
-            text = "💬 댓글"; textSize = 18f
-            setTextColor(activity.getColor(R.color.textDark))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            text = "댓글"; textSize = 16f; gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD); setTextColor(activity.getColor(R.color.textDark))
+            setPadding(0, 0, 0, px(10))
+        })
+        root.addView(android.view.View(activity).apply {
+            setBackgroundColor(activity.getColor(R.color.divider))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, px(1))
         })
 
-        val listBox = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+        val listBox = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(16), px(8), px(16), px(8))
+        }
         val scroll = ScrollView(activity).apply {
             addView(listBox)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, px(300)).apply {
-                topMargin = px(10)
-            }
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f)
         }
         root.addView(scroll)
 
+        // 이모지 퀵바
+        val emojiRow = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(px(8), px(8), px(8), px(4))
+        }
+        root.addView(android.view.View(activity).apply {
+            setBackgroundColor(activity.getColor(R.color.divider))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, px(1))
+        })
+
         // 입력 줄
         val inputRow = LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, px(12), 0, 0)
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(px(14), px(6), px(14), px(12))
+        }
+        val avatar = TextView(activity).apply {
+            text = "🏃"; textSize = 16f; gravity = Gravity.CENTER
+            setBackgroundResource(R.drawable.bg_icon_circle)
+            layoutParams = LinearLayout.LayoutParams(px(36), px(36)).apply { marginEnd = px(10) }
         }
         val input = EditText(activity).apply {
-            hint = "댓글 달기…"
+            hint = (authorName?.let { "${it}님에게 " } ?: "") + "댓글 추가…"
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setBackgroundResource(R.drawable.edit_field_bg)
-            setPadding(px(14), px(12), px(14), px(12))
-            textSize = 14f
+            setPadding(px(14), px(10), px(14), px(10)); textSize = 14f
         }
         val send = TextView(activity).apply {
-            text = "전송"; textSize = 14f
-            setTextColor(activity.getColor(android.R.color.white))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
-            setBackgroundResource(R.drawable.btn_primary)
-            gravity = Gravity.CENTER
-            setPadding(px(18), px(12), px(18), px(12))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-                marginStart = px(8)
-            }
+            text = "게시"; textSize = 14f; setTypeface(typeface, Typeface.BOLD)
+            setTextColor(activity.getColor(R.color.primary))
+            setPadding(px(12), px(10), px(6), px(10))
         }
-        inputRow.addView(input); inputRow.addView(send)
+        inputRow.addView(avatar); inputRow.addView(input); inputRow.addView(send)
+
+        for (e in QUICK) emojiRow.addView(TextView(activity).apply {
+            text = e; textSize = 22f; setPadding(px(8), px(2), px(8), px(2))
+            setOnClickListener { input.append(e); input.setSelection(input.text.length) }
+        })
+        root.addView(HorizontalScrollView(activity).apply { isHorizontalScrollBarEnabled = false; addView(emojiRow) })
         root.addView(inputRow)
 
-        val dialog = Dialog(activity, R.style.RundexDialog).apply {
-            setContentView(root)
-            window?.setBackgroundDrawableResource(android.R.color.transparent)
+        val dialog = Dialog(activity, R.style.RundexDialog).apply { setContentView(root) }
+        dialog.window?.apply {
+            setBackgroundDrawableResource(android.R.color.transparent)
+            setGravity(Gravity.BOTTOM)
+            val h = (activity.resources.displayMetrics.heightPixels * 0.72).toInt()
+            setLayout(LinearLayout.LayoutParams.MATCH_PARENT, h)
         }
 
         fun renderComments(arr: JSONArray) {
@@ -85,27 +118,49 @@ object CommentsDialog {
                 listBox.addView(TextView(activity).apply {
                     text = "첫 댓글을 남겨보세요!"
                     setTextColor(activity.getColor(R.color.textGrey)); textSize = 13f
-                    setPadding(0, px(16), 0, px(16)); gravity = Gravity.CENTER
+                    setPadding(0, px(20), 0, px(20)); gravity = Gravity.CENTER
                 })
                 return
             }
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val name = o.optJSONObject("profiles")?.optString("display_name")?.takeIf { it.isNotBlank() } ?: "러너"
-                val cell = LinearLayout(activity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    setPadding(0, px(8), 0, px(8))
+                val row = LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL; setPadding(0, px(10), 0, px(10))
                 }
-                cell.addView(TextView(activity).apply {
-                    text = "$name  ·  ${relTime(o.optString("created_at"))}"
-                    setTextColor(activity.getColor(R.color.textGrey)); textSize = 11f
+                row.addView(TextView(activity).apply {
+                    text = name.take(1); textSize = 15f; gravity = Gravity.CENTER
+                    setBackgroundResource(R.drawable.bg_icon_circle)
+                    setTextColor(activity.getColor(R.color.iconTint))
+                    layoutParams = LinearLayout.LayoutParams(px(38), px(38)).apply { marginEnd = px(12) }
                 })
-                cell.addView(TextView(activity).apply {
-                    text = o.optString("text")
-                    setTextColor(activity.getColor(R.color.textDark)); textSize = 14f
-                    setPadding(0, px(2), 0, 0)
+                val col = LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                // 이름 · 시간
+                val head = SpannableStringBuilder()
+                head.append(name); head.setSpan(StyleSpan(Typeface.BOLD), 0, name.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                val t = "   " + relTime(o.optString("created_at"))
+                val s0 = head.length; head.append(t)
+                head.setSpan(ForegroundColorSpan(activity.getColor(R.color.textGrey)), s0, head.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                col.addView(TextView(activity).apply { text = head; textSize = 13f; setTextColor(activity.getColor(R.color.textDark)) })
+                col.addView(TextView(activity).apply {
+                    text = o.optString("text"); textSize = 14f
+                    setTextColor(activity.getColor(R.color.textDark)); setPadding(0, px(2), 0, 0)
                 })
-                listBox.addView(cell)
+                col.addView(TextView(activity).apply {
+                    text = "답글 달기"; textSize = 11f
+                    setTextColor(activity.getColor(R.color.textGrey)); setPadding(0, px(4), 0, 0)
+                    setOnClickListener { input.requestFocus() }
+                })
+                row.addView(col)
+                // 우측 하트(시각 토글)
+                row.addView(TextView(activity).apply {
+                    text = "🤍"; textSize = 15f; setPadding(px(8), px(2), 0, 0)
+                    setOnClickListener { text = if (text == "🤍") "❤️" else "🤍" }
+                })
+                listBox.addView(row)
             }
             scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
         }
@@ -142,9 +197,9 @@ object CommentsDialog {
         val diff = System.currentTimeMillis() - t
         return when {
             diff < 60_000 -> "방금"
-            diff < 3_600_000 -> "${diff / 60_000}분 전"
-            diff < 86_400_000 -> "${diff / 3_600_000}시간 전"
-            diff < 604_800_000 -> "${diff / 86_400_000}일 전"
+            diff < 3_600_000 -> "${diff / 60_000}분"
+            diff < 86_400_000 -> "${diff / 3_600_000}시간"
+            diff < 604_800_000 -> "${diff / 86_400_000}일"
             else -> SimpleDateFormat("M월 d일", Locale.KOREA).format(java.util.Date(t))
         }
     }
