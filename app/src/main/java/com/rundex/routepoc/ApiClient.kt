@@ -160,6 +160,10 @@ class ApiClient(
                 "&order=started_at.desc&limit=100", cb
         )
 
+    /** 내 러닝 필드 수정 (캡션 등, 본인 행) */
+    fun patchRun(runId: String, body: JSONObject, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendArrayAsObject("PATCH", "/rest/v1/runs?id=eq.$runId", body, cb)
+
     /** 과거 런 공개/비공개 전환 (RPC) */
     fun setRunVisibility(runId: String, visibility: String, cb: (Result<JSONObject>) -> Unit = {}) =
         postObject(

@@ -21,6 +21,9 @@ class ProfileActivity : Activity() {
 
     private val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
     private val dateFmt = SimpleDateFormat("M/d", Locale.KOREA)
+    private val labelFmt = SimpleDateFormat("M월 d일 HH:mm", Locale.KOREA)
+    private var postsMode = "posts"      // "posts"(공개=게시물) | "records"(전체 러닝기록)
+    private var allRuns = JSONArray()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -33,6 +36,26 @@ class ProfileActivity : Activity() {
         findViewById<TextView>(R.id.menuButton).setOnClickListener { showMenu() }
         findViewById<View>(R.id.statFollowers).setOnClickListener { openFollowList("followers") }
         findViewById<View>(R.id.statFollowing).setOnClickListener { openFollowList("following") }
+        findViewById<TextView>(R.id.tabPosts).setOnClickListener { switchTab("posts") }
+        findViewById<TextView>(R.id.tabRecords).setOnClickListener { switchTab("records") }
+        findViewById<TextView>(R.id.registerPost).setOnClickListener { showRegisterPicker() }
+        styleTabs()
+    }
+
+    private fun switchTab(mode: String) {
+        if (postsMode == mode) return
+        postsMode = mode
+        styleTabs()
+        renderPosts(allRuns)
+    }
+
+    private fun styleTabs() {
+        val posts = findViewById<TextView>(R.id.tabPosts)
+        val records = findViewById<TextView>(R.id.tabRecords)
+        val on = postsMode == "posts"
+        posts.setTextColor(getColor(if (on) R.color.primary else R.color.textGrey))
+        records.setTextColor(getColor(if (on) R.color.textGrey else R.color.primary))
+        findViewById<View>(R.id.registerPost).visibility = if (on) View.VISIBLE else View.GONE
     }
 
     override fun onResume() {
@@ -127,29 +150,88 @@ class ProfileActivity : Activity() {
         val uid = Session(this).userId
         if (!ApiConfig.enabled || uid == null) return
         ApiClient(Session(this)).listMyRuns(uid) { r ->
-            runOnUiThread { r.onSuccess { renderPosts(it) } }
+            runOnUiThread { r.onSuccess { allRuns = it; renderPosts(it) } }
         }
     }
 
+    /** 현재 탭에 맞춰 그리드 렌더 — 게시물=공개만, 러닝기록=전체 */
     private fun renderPosts(arr: JSONArray) {
         val grid = findViewById<LinearLayout>(R.id.postsGrid)
         grid.removeAllViews()
-        findViewById<TextView>(R.id.postsEmpty).visibility = if (arr.length() == 0) View.VISIBLE else View.GONE
-        var row: LinearLayout? = null
+        // 탭 필터
+        val shown = ArrayList<JSONObject>()
         for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (postsMode == "records" || o.optString("visibility", "private") == "public") shown.add(o)
+        }
+        val empty = findViewById<TextView>(R.id.postsEmpty)
+        empty.visibility = if (shown.isEmpty()) View.VISIBLE else View.GONE
+        empty.text = if (postsMode == "posts")
+            "아직 올린 게시물이 없어요.\n위 버튼으로 러닝 기록을 게시해보세요!"
+        else "아직 기록한 러닝이 없어요.\n러닝 탭에서 첫 기록을 남겨보세요!"
+
+        var row: LinearLayout? = null
+        for (i in shown.indices) {
             if (i % 2 == 0) {
                 row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
                 grid.addView(row)
             }
             val cell = layoutInflater.inflate(R.layout.cell_post, row, false)
-            bindPost(cell, arr.getJSONObject(i))
+            bindPost(cell, shown[i])
             row!!.addView(cell)
         }
-        if (arr.length() % 2 == 1) {  // 홀수면 빈 칸으로 정렬 유지
-            row?.addView(View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
-            })
+        if (shown.size % 2 == 1) row?.addView(View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+        })
+    }
+
+    /** 러닝 기록에서 비공개 러닝을 골라 게시물로 올리기(공개 전환 + 캡션) */
+    private fun showRegisterPicker() {
+        val privates = ArrayList<JSONObject>()
+        for (i in 0 until allRuns.length()) {
+            val o = allRuns.getJSONObject(i)
+            if (o.optString("visibility", "private") != "public") privates.add(o)
         }
+        if (privates.isEmpty()) {
+            Toast.makeText(this, "올릴 수 있는 비공개 러닝이 없어요. 모두 게시됐어요!", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val labels = privates.map { o ->
+            val d = runCatching { iso.parse(o.optString("started_at").take(19)) }.getOrNull()
+            "${d?.let { labelFmt.format(it) } ?: "-"} · ${TrackActivity.formatKm(o.optDouble("distance_m"))}"
+        }.toTypedArray()
+        AlertDialog.Builder(this, R.style.RundexDialog)
+            .setTitle("게시할 러닝 선택")
+            .setItems(labels) { _, i -> confirmPublish(privates[i]) }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun confirmPublish(o: JSONObject) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad / 2, pad, 0) }
+        val cap = EditText(this).apply { hint = "한마디 (선택) — 예: 한강 노을 보며 🏃" }
+        box.addView(cap)
+        AlertDialog.Builder(this, R.style.RundexDialog)
+            .setTitle("피드에 게시할까요?")
+            .setMessage("${TrackActivity.formatKm(o.optDouble("distance_m"))} 러닝을 공개합니다.")
+            .setView(box)
+            .setPositiveButton("게시") { _, _ ->
+                val rid = o.optString("id")
+                val caption = cap.text.toString().trim()
+                val api = ApiClient(Session(this))
+                api.setRunVisibility(rid, "public") { r ->
+                    runOnUiThread {
+                        r.onSuccess {
+                            if (caption.isNotEmpty()) api.patchRun(rid, JSONObject().put("caption", caption))
+                            Toast.makeText(this, "게시했어요! 피드에서 볼 수 있어요 🎉", Toast.LENGTH_SHORT).show()
+                            postsMode = "posts"; styleTabs(); loadPosts()
+                        }.onFailure { Toast.makeText(this, "게시 실패", Toast.LENGTH_SHORT).show() }
+                    }
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun bindPost(cell: View, o: JSONObject) {
