@@ -13,6 +13,7 @@ import java.util.Locale
 /** 인스타형 피드 카드 1개 (공개 런) */
 data class FeedItem(
     val runId: String,
+    val userId: String,
     val name: String,
     val whenText: String,
     val chip: String,
@@ -33,6 +34,7 @@ class FeedAdapter(
     private val items: List<FeedItem>,
     private val onToggleLike: (Int) -> Unit = {},
     private val onOpen: (Int) -> Unit = {},
+    private val onOpenProfile: (Int) -> Unit = {},
 ) : ArrayAdapter<FeedItem>(activity, R.layout.row_feed, items) {
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
@@ -40,6 +42,9 @@ class FeedAdapter(
         val it = items[position]
         // 카드(경로 영역 등) 탭 → 상세 보기. 좋아요 버튼은 자체 리스너로 소비.
         v.findViewById<View>(R.id.feedRoute).setOnClickListener { onOpen(position) }
+        // 작성자(아바타·이름) 탭 → 공개 프로필
+        v.findViewById<View>(R.id.feedAvatar).setOnClickListener { onOpenProfile(position) }
+        v.findViewById<View>(R.id.feedName).setOnClickListener { onOpenProfile(position) }
         v.findViewById<TextView>(R.id.feedLike).apply {
             text = (if (it.likedByMe) "❤️ " else "🤍 ") + it.likeCount
             setOnClickListener { onToggleLike(position) }
@@ -82,6 +87,7 @@ class FeedAdapter(
                 caption = o.optString("caption").takeIf { it != "null" } ?: "",
                 tags = parseTags(o.optJSONArray("tags")),
                 runId = o.optString("run_id"),
+                userId = o.optString("user_id"),
                 likeCount = o.optInt("like_count"),
                 likedByMe = o.optBoolean("liked_by_me"),
                 distanceM = o.optDouble("distance_m"),

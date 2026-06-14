@@ -52,6 +52,10 @@ class ApiClient(
     fun getMyStats(cb: (Result<JSONObject>) -> Unit) =
         postObject("/rest/v1/rpc/my_stats", JSONObject(), cb)
 
+    /** 다른 사용자 공개 프로필 — 이름·핸들·발견동·공개러닝수·칭호·팔로워·내가 팔로우중인지 */
+    fun getPublicProfile(userId: String, cb: (Result<JSONObject>) -> Unit) =
+        postObject("/rest/v1/rpc/public_profile", JSONObject().put("p_user", userId), cb)
+
     /** 내 알림 — 내 러닝에 좋아요 / 나를 팔로우 (최신순) */
     fun getNotifications(cb: (Result<JSONArray>) -> Unit) {
         val req = build("/rest/v1/rpc/my_notifications")

@@ -24,7 +24,7 @@ class UsersActivity : Activity() {
         adapter = SocialRowAdapter(this, rows)
         val list = findViewById<ListView>(R.id.userList)
         list.adapter = adapter
-        list.setOnItemClickListener { _, _, pos, _ -> toggleFollow(pos) }
+        list.setOnItemClickListener { _, _, pos, _ -> openProfile(pos) }
 
         findViewById<EditText>(R.id.userSearchInput).setOnEditorActionListener { v, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) { search(v.text.toString().trim()); true } else false
@@ -76,6 +76,16 @@ class UsersActivity : Activity() {
             rows.add(SocialRow(names[i].first().toString(), names[i], handle, if (on) "팔로잉 ✓" else "＋ 팔로우"))
         }
         adapter.notifyDataSetChanged()
+    }
+
+    /** 검색 결과 탭 → 그 러너의 공개 프로필 (거기서 팔로우) */
+    private fun openProfile(pos: Int) {
+        if (pos >= ids.size) return
+        startActivity(
+            android.content.Intent(this, PublicProfileActivity::class.java)
+                .putExtra("userId", ids[pos])
+                .putExtra("name", names[pos])
+        )
     }
 
     private fun toggleFollow(pos: Int) {

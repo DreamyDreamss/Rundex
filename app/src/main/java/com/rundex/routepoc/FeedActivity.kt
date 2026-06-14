@@ -18,7 +18,7 @@ class FeedActivity : Activity() {
         setContentView(R.layout.activity_feed)
         NavBar.setup(this, R.id.navFeed)
 
-        adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRunDetail(pos) })
+        adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRunDetail(pos) }, { pos -> openProfile(pos) })
         findViewById<ListView>(R.id.feedList).adapter = adapter
         findViewById<TextView>(R.id.feedTabAll).setOnClickListener { switchTab(false) }
         findViewById<TextView>(R.id.feedTabFollowing).setOnClickListener { switchTab(true) }
@@ -63,6 +63,18 @@ class FeedActivity : Activity() {
                 .putExtra("distanceM", it.distanceM)
                 .putExtra("durationMs", it.durationMs)
                 .putExtra("caption", it.caption)
+        )
+    }
+
+    /** 피드 작성자 탭 → 공개 프로필 */
+    private fun openProfile(pos: Int) {
+        if (pos >= items.size) return
+        val it = items[pos]
+        if (it.userId.isBlank()) return
+        startActivity(
+            android.content.Intent(this, PublicProfileActivity::class.java)
+                .putExtra("userId", it.userId)
+                .putExtra("name", it.name)
         )
     }
 
