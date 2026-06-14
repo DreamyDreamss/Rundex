@@ -176,6 +176,25 @@
             </LinearLayout>
         </LinearLayout>
 
+        <!-- 빈 지도 가이드 힌트 -->
+        <TextView
+            android:id="@+id/planHint"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:background="@drawable/chip_bg"
+            android:elevation="4dp"
+            android:gravity="center"
+            android:lineSpacingExtra="3dp"
+            android:paddingStart="22dp"
+            android:paddingTop="14dp"
+            android:paddingEnd="22dp"
+            android:paddingBottom="14dp"
+            android:text="🗺️ 지도를 탭해 점을 찍으면\n경로가 그려져요"
+            android:textColor="@color/primary"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
         <!-- 내 위치 FAB -->
         <ImageView
             android:id="@+id/myLocationButton"

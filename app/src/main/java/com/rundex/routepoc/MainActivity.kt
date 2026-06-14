@@ -416,6 +416,8 @@ class MainActivity : Activity() {
     }
 
     private fun redraw() {
+        findViewById<android.view.View>(R.id.planHint).visibility =
+            if (state.waypoints.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
         waypointSource?.setGeoJson(
             FeatureCollection.fromFeatures(
                 state.waypoints.map { Feature.fromGeometry(Point.fromLngLat(it.lon, it.lat)) }
