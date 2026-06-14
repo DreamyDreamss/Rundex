@@ -210,8 +210,11 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         runCountdown { startRecording() }
     }
 
+    private var lastKm = 0
+
     private fun startRecording() {
         maybePromptBatteryExemption()
+        lastKm = 0
         TrackRecorder.start(System.currentTimeMillis())
         startForegroundService(Intent(this, TrackingService::class.java))
         runMapMode = false
@@ -715,6 +718,29 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         val kmh = if (elapsed > 0) dist / 1000.0 / (elapsed / 3_600_000.0) else 0.0
         findViewById<TextView>(R.id.mapSpeed).text = String.format(Locale.US, "%.1f", kmh)
         refreshGoal(dist, elapsed)
+
+        // 1km 구간 통과 — 랩 플래시 + 진동
+        val kmReached = (dist / 1000.0).toInt()
+        if (kmReached > lastKm && TrackRecorder.recording) {
+            lastKm = kmReached
+            flashKm(kmReached)
+        }
+    }
+
+    private val flashHandler = Handler(Looper.getMainLooper())
+    private fun flashKm(km: Int) {
+        val splits = RunStats.splitsMs(TrackRecorder.points)
+        val paceTxt = splits.getOrNull(km - 1)?.let { RunStats.formatPaceSec(it / 1000.0) } ?: ""
+        val flash = findViewById<TextView>(R.id.kmFlash)
+        flash.text = "🏁 ${km}km" + if (paceTxt.isNotBlank()) "  ·  $paceTxt" else ""
+        flash.alpha = 0f
+        flash.visibility = View.VISIBLE
+        flash.animate().alpha(1f).setDuration(200).start()
+        vibrate(80L)
+        flashHandler.removeCallbacksAndMessages(null)
+        flashHandler.postDelayed({
+            flash.animate().alpha(0f).setDuration(300).withEndAction { flash.visibility = View.GONE }.start()
+        }, 2600)
     }
 
     private fun redrawTrack() {
