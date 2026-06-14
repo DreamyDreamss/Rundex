@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -119,6 +120,8 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
                 startActivity(Intent(this, RunHistoryActivity::class.java))
             else showHistory()
         }
+        findViewById<TextView>(R.id.goalChip).setOnClickListener { showGoalPicker() }
+        updateGoalChip()
         loadRecommendedCards()
         maybeOfferRecovery()
 
@@ -277,6 +280,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         val showMap = running && (runMapMode || paused)   // 일시정지=지도 페이지
         findViewById<View>(R.id.idleTop).visibility = if (running) View.GONE else View.VISIBLE
         findViewById<View>(R.id.idleControls).visibility = if (running) View.GONE else View.VISIBLE
+        findViewById<View>(R.id.goalChip).visibility = if (running) View.GONE else View.VISIBLE
         runStatsOverlay.visibility = if (running && !showMap) View.VISIBLE else View.GONE
         runMapBar.visibility = if (showMap) View.VISIBLE else View.GONE
 
@@ -294,6 +298,60 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
     private fun setRunMapMode(mapMode: Boolean) {
         runMapMode = mapMode
         setState()
+    }
+
+    // ── 러닝 목표 ───────────────────────────────────────────────
+    private fun goalPrefs() = getSharedPreferences("profile", MODE_PRIVATE)
+    private fun goalType() = goalPrefs().getString("goal_type", "none") ?: "none"
+    private fun goalValue() = goalPrefs().getDouble("goal_value", 0.0)
+
+    private fun SharedPreferences.getDouble(k: String, d: Double) =
+        Double.fromBits(getLong(k, d.toRawBits()))
+
+    private fun updateGoalChip() {
+        val chip = findViewById<TextView>(R.id.goalChip)
+        chip.text = when (goalType()) {
+            "dist" -> "🎯 목표 ${String.format(Locale.US, "%.1f", goalValue() / 1000.0)}km"
+            "time" -> "🎯 목표 ${(goalValue() / 60000).toInt()}분"
+            else -> "🎯 목표 설정"
+        }
+    }
+
+    private fun showGoalPicker() {
+        val opts = arrayOf("거리 3km", "거리 5km", "거리 10km", "시간 20분", "시간 30분", "시간 60분", "목표 없음")
+        AlertDialog.Builder(this, R.style.RundexDialog)
+            .setTitle("🎯 러닝 목표")
+            .setItems(opts) { _, i ->
+                val e = goalPrefs().edit()
+                when (i) {
+                    0 -> e.putString("goal_type", "dist").putLong("goal_value", 3000.0.toRawBits())
+                    1 -> e.putString("goal_type", "dist").putLong("goal_value", 5000.0.toRawBits())
+                    2 -> e.putString("goal_type", "dist").putLong("goal_value", 10000.0.toRawBits())
+                    3 -> e.putString("goal_type", "time").putLong("goal_value", (20 * 60000).toDouble().toRawBits())
+                    4 -> e.putString("goal_type", "time").putLong("goal_value", (30 * 60000).toDouble().toRawBits())
+                    5 -> e.putString("goal_type", "time").putLong("goal_value", (60 * 60000).toDouble().toRawBits())
+                    else -> e.putString("goal_type", "none")
+                }
+                e.apply(); updateGoalChip(); refreshStats()
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    /** 인런 화면 목표 진행도 갱신 */
+    private fun refreshGoal(distM: Double, elapsedMs: Long) {
+        val box = findViewById<View>(R.id.goalProgress)
+        val type = goalType()
+        if (type == "none" || !TrackRecorder.recording) { box.visibility = View.GONE; return }
+        box.visibility = View.VISIBLE
+        val target = goalValue()
+        val cur = if (type == "dist") distM else elapsedMs.toDouble()
+        val pct = (cur / target).coerceIn(0.0, 1.0)
+        findViewById<android.widget.ProgressBar>(R.id.goalProgressBar).progress = (pct * 1000).toInt()
+        val txt = findViewById<TextView>(R.id.goalProgressText)
+        txt.text = if (pct >= 1.0) "🎉 목표 달성!"
+        else if (type == "dist") "목표 ${String.format(Locale.US, "%.1f", target / 1000.0)}km · ${(pct * 100).toInt()}%"
+        else "목표 ${(target / 60000).toInt()}분 · ${(pct * 100).toInt()}%"
     }
 
     /** 비정상 종료로 남은 진행 기록이 있으면 이어서 기록할지/저장할지 제안 */
@@ -656,6 +714,7 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         // 평균 속도 km/h (시간>0일 때만)
         val kmh = if (elapsed > 0) dist / 1000.0 / (elapsed / 3_600_000.0) else 0.0
         findViewById<TextView>(R.id.mapSpeed).text = String.format(Locale.US, "%.1f", kmh)
+        refreshGoal(dist, elapsed)
     }
 
     private fun redrawTrack() {

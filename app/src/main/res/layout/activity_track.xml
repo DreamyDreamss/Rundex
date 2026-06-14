@@ -125,6 +125,24 @@
                 </LinearLayout>
             </LinearLayout>
 
+            <!-- 🎯 목표 칩 (시작 버튼 위) -->
+            <TextView
+                android:id="@+id/goalChip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|center_horizontal"
+                android:layout_marginBottom="156dp"
+                android:background="@drawable/chip_bg"
+                android:elevation="4dp"
+                android:paddingStart="18dp"
+                android:paddingTop="9dp"
+                android:paddingEnd="18dp"
+                android:paddingBottom="9dp"
+                android:text="🎯 목표 설정"
+                android:textColor="@color/primary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
             <!-- 러닝 중 '지도 모드' 하단 패널: 2×3 스탯 그리드 + 컨트롤 (기본 숨김) -->
             <LinearLayout
                 android:id="@+id/runMapBar"
@@ -267,6 +285,38 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:text="시간" android:textColor="#7A3A1E" android:textSize="13sp" />
             </LinearLayout>
+        </LinearLayout>
+
+        <!-- 🎯 목표 진행도 (목표 설정 시) -->
+        <LinearLayout
+            android:id="@+id/goalProgress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="32dp"
+            android:layout_marginTop="18dp"
+            android:layout_marginEnd="32dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/goalProgressText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:fontFeatureSettings="tnum"
+                android:textColor="#1C1C1E"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <ProgressBar
+                android:id="@+id/goalProgressBar"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="8dp"
+                android:layout_marginTop="6dp"
+                android:max="1000"
+                android:progressTint="#1C1C1E"
+                android:progressBackgroundTint="#66FFFFFF" />
         </LinearLayout>
 
         <LinearLayout
