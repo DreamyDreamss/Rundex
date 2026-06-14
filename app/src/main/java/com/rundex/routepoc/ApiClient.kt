@@ -36,6 +36,10 @@ class ApiClient(
     fun getTitleRarity(cb: (Result<JSONArray>) -> Unit) =
         getArray("/rest/v1/title_rarity?select=*", cb)
 
+    /** 내가 획득한 칭호 — 코드 + 획득일 */
+    fun getMyTitles(userId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray("/rest/v1/user_titles?user_id=eq.$userId&select=earned_at,titles(code)", cb)
+
     /** 대표 칭호 등 프로필 갱신 (본인 행) */
     fun patchMe(userId: String, body: JSONObject, cb: (Result<JSONObject>) -> Unit = {}) =
         sendArrayAsObject("PATCH", "/rest/v1/profiles?id=eq.$userId", body, cb)
