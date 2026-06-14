@@ -293,16 +293,46 @@ class ApiClient(
         return b
     }
 
-    private fun enqueue(req: Request, done: (Result<String>) -> Unit) {
+    private fun enqueue(req: Request, retryOn401: Boolean = true, done: (Result<String>) -> Unit) {
         http.newCall(req).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) = done(Result.failure(e))
             override fun onResponse(call: Call, response: Response) {
+                // 401(만료된 익명 토큰) → 토큰 갱신 후 1회 재시도. 데이터가 '갑자기 다 안나오는' 현상 방지.
+                if (response.code == 401 && retryOn401 && session.refreshToken != null) {
+                    response.close()
+                    val fresh = refreshTokenBlocking()
+                    if (fresh != null) {
+                        val req2 = req.newBuilder().header("Authorization", "Bearer $fresh").build()
+                        enqueue(req2, retryOn401 = false, done = done)
+                    } else done(Result.failure(IOException("HTTP 401 (refresh failed)")))
+                    return
+                }
                 response.use {
                     if (!it.isSuccessful) { done(Result.failure(IOException("HTTP ${it.code}"))); return }
                     done(Result.success(it.body?.string().orEmpty()))
                 }
             }
         })
+    }
+
+    /** 만료된 액세스 토큰을 refresh_token으로 동기 갱신(콜백 스레드에서 호출). 실패 시 null. */
+    private fun refreshTokenBlocking(): String? {
+        val rt = session.refreshToken ?: return null
+        val req = Request.Builder()
+            .url(ApiConfig.BASE_URL.trimEnd('/') + "/auth/v1/token?grant_type=refresh_token")
+            .header("apikey", ApiConfig.ANON_KEY)
+            .header("Authorization", "Bearer ${ApiConfig.ANON_KEY}")
+            .post(JSONObject().put("refresh_token", rt).toString().toRequestBody(jsonMedia))
+            .build()
+        return runCatching {
+            http.newCall(req).execute().use { r ->
+                if (!r.isSuccessful) return null
+                val o = JSONObject(r.body?.string().orEmpty())
+                o.optString("access_token").takeIf { it.isNotEmpty() }?.let { session.token = it }
+                o.optString("refresh_token").takeIf { it.isNotEmpty() }?.let { session.refreshToken = it }
+                session.token
+            }
+        }.getOrNull()
     }
 
     private fun <T> skipped(): Result<T> = Result.failure(IllegalStateException("ApiConfig disabled"))
