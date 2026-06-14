@@ -13,7 +13,7 @@
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="62dp"
+        android:layout_height="48dp"
         android:orientation="horizontal">
 
         <LinearLayout
@@ -21,21 +21,13 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:gravity="center">
             <TextView
+                android:id="@+id/navFeedIcon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="📣"
-                android:textSize="21sp" />
-            <TextView
-                android:id="@+id/navFeedLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="피드"
-                android:textColor="@color/textGrey"
-                android:textSize="11sp" />
+                android:textSize="23sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -43,21 +35,13 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:gravity="center">
             <TextView
+                android:id="@+id/navRunIcon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="🏃"
-                android:textSize="21sp" />
-            <TextView
-                android:id="@+id/navRunLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="러닝"
-                android:textColor="@color/textGrey"
-                android:textSize="11sp" />
+                android:textSize="23sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -65,21 +49,13 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:gravity="center">
             <TextView
+                android:id="@+id/navDexIcon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="📒"
-                android:textSize="21sp" />
-            <TextView
-                android:id="@+id/navDexLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="도감"
-                android:textColor="@color/textGrey"
-                android:textSize="11sp" />
+                android:textSize="23sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -87,21 +63,13 @@
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical">
+            android:gravity="center">
             <TextView
+                android:id="@+id/navProfileIcon"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="👤"
-                android:textSize="21sp" />
-            <TextView
-                android:id="@+id/navProfileLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
-                android:text="프로필"
-                android:textColor="@color/textGrey"
-                android:textSize="11sp" />
+                android:textSize="23sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>

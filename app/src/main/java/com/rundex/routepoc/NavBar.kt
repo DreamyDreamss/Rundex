@@ -14,18 +14,18 @@ object NavBar {
             R.id.navDex to DexActivity::class.java,
             R.id.navProfile to ProfileActivity::class.java,
         )
-        val labels = mapOf(
-            R.id.navFeed to R.id.navFeedLabel,
-            R.id.navRun to R.id.navRunLabel,
-            R.id.navDex to R.id.navDexLabel,
-            R.id.navProfile to R.id.navProfileLabel,
+        val icons = mapOf(
+            R.id.navFeed to R.id.navFeedIcon,
+            R.id.navRun to R.id.navRunIcon,
+            R.id.navDex to R.id.navDexIcon,
+            R.id.navProfile to R.id.navProfileIcon,
         )
         tabs.forEach { (navId, target) ->
             val item = activity.findViewById<android.view.View>(navId) ?: return@forEach
-            if (navId == currentNavId) {
-                activity.findViewById<TextView>(labels.getValue(navId))
-                    .setTextColor(activity.getColor(R.color.primary))
-            } else {
+            // 라벨 없이 아이콘만 — 현재 탭은 선명, 나머지는 흐리게
+            activity.findViewById<TextView>(icons.getValue(navId))?.alpha =
+                if (navId == currentNavId) 1f else 0.4f
+            if (navId != currentNavId) {
                 item.setOnClickListener {
                     activity.startActivity(
                         Intent(activity, target)
