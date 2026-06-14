@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp">
+
+        <TextView
+            android:id="@+id/setBack"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:gravity="center"
+            android:text="‹"
+            android:textColor="@color/textDark"
+            android:textSize="30sp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="⚙️ 설정"
+            android:textColor="@color/textDark"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="24dp">
+
+            <!-- 계정 -->
+            <TextView style="@style/SettingSection" android:text="계정" />
+            <LinearLayout style="@style/SettingCard">
+                <TextView android:id="@+id/setAccount" style="@style/SettingRow" android:text="👤 내 계정" />
+                <View style="@style/SettingDivider" />
+                <TextView android:id="@+id/setRecover" style="@style/SettingRow" android:text="🔐 계정 백업·복구  (준비 중)" />
+            </LinearLayout>
+
+            <!-- 러닝 -->
+            <TextView style="@style/SettingSection" android:text="러닝" />
+            <LinearLayout style="@style/SettingCard">
+                <TextView android:id="@+id/setDefaultPublic" style="@style/SettingRow" android:text="새 러닝 기본 공개" />
+                <View style="@style/SettingDivider" />
+                <TextView android:id="@+id/setBattery" style="@style/SettingRow" android:text="🔋 배터리 최적화 예외 허용" />
+            </LinearLayout>
+
+            <!-- 정보 -->
+            <TextView style="@style/SettingSection" android:text="정보" />
+            <LinearLayout style="@style/SettingCard">
+                <TextView android:id="@+id/setVersion" style="@style/SettingRow" android:text="📱 앱 버전" />
+                <View style="@style/SettingDivider" />
+                <TextView android:id="@+id/setRepo" style="@style/SettingRow" android:text="💻 GitHub 저장소" />
+                <View style="@style/SettingDivider" />
+                <TextView android:id="@+id/setAbout" style="@style/SettingRow" android:text="ℹ️ Rundex 소개" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>

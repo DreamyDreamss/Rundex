@@ -261,6 +261,16 @@
                 android:text="🤝  크루"
                 android:textColor="@color/textDark"
                 android:textSize="15sp" />
+
+            <Button
+                android:id="@+id/openSettingsButton"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/btn_secondary"
+                android:text="⚙️  설정"
+                android:textColor="@color/textDark"
+                android:textSize="15sp" />
         </LinearLayout>
     </ScrollView>
 

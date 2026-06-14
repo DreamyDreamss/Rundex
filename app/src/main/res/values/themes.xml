@@ -13,4 +13,45 @@
         <item name="android:windowMinWidthMajor">88%</item>
         <item name="android:windowMinWidthMinor">88%</item>
     </style>
+
+    <!-- 설정 화면 공용 스타일 -->
+    <style name="SettingSection">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">20dp</item>
+        <item name="android:layout_marginTop">16dp</item>
+        <item name="android:layout_marginBottom">6dp</item>
+        <item name="android:textColor">@color/textGrey</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="SettingCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginStart">14dp</item>
+        <item name="android:layout_marginEnd">14dp</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/card_bg</item>
+        <item name="android:elevation">2dp</item>
+    </style>
+
+    <style name="SettingRow">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:paddingStart">18dp</item>
+        <item name="android:paddingTop">16dp</item>
+        <item name="android:paddingEnd">18dp</item>
+        <item name="android:paddingBottom">16dp</item>
+        <item name="android:textColor">@color/textDark</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:background">?android:attr/selectableItemBackground</item>
+    </style>
+
+    <style name="SettingDivider">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">1dp</item>
+        <item name="android:layout_marginStart">18dp</item>
+        <item name="android:background">@color/divider</item>
+    </style>
 </resources>

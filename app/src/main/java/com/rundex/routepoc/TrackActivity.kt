@@ -385,11 +385,19 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             window?.setBackgroundDrawableResource(android.R.color.transparent)
             setCancelable(false)
         }
-        view.findViewById<TextView>(R.id.btnPrivate).setOnClickListener {
+        // 설정의 '새 러닝 기본 공개'에 따라 강조 버튼을 바꾼다
+        val defPublic = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("default_public", false)
+        val btnPriv = view.findViewById<TextView>(R.id.btnPrivate)
+        val btnPub = view.findViewById<TextView>(R.id.btnPublish)
+        if (!defPublic) {
+            btnPriv.setBackgroundResource(R.drawable.btn_primary); btnPriv.setTextColor(android.graphics.Color.WHITE)
+            btnPub.setBackgroundResource(R.drawable.btn_secondary); btnPub.setTextColor(getColor(R.color.textDark))
+        }
+        btnPriv.setOnClickListener {
             submitRunToServer(track, "private", "", emptyList())
             dialog.dismiss(); showRunResult(track, ach)
         }
-        view.findViewById<TextView>(R.id.btnPublish).setOnClickListener {
+        btnPub.setOnClickListener {
             submitRunToServer(track, "public",
                 captionInput.text.toString().trim(), parseTags(tagsInput.text.toString()))
             dialog.dismiss(); showRunResult(track, ach)

@@ -41,6 +41,9 @@ class ProfileActivity : Activity() {
         findViewById<Button>(R.id.openCrewButton).setOnClickListener {
             startActivity(Intent(this, CrewActivity::class.java))
         }
+        findViewById<Button>(R.id.openSettingsButton).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
     }
 
     override fun onResume() {
