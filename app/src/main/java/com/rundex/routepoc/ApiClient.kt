@@ -121,7 +121,8 @@ class ApiClient(
     fun listMyRuns(userId: String, cb: (Result<JSONArray>) -> Unit) =
         getArray(
             "/rest/v1/runs?user_id=eq.$userId" +
-                "&select=id,started_at,distance_m,duration_ms,visibility,caption,geom" +
+                "&select=id,started_at,ended_at,distance_m,duration_ms,visibility,caption,tags,geom," +
+                "run_region_ledger(count),run_reactions(count)" +
                 "&order=started_at.desc&limit=100", cb
         )
 

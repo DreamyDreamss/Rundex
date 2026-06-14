@@ -31,6 +31,7 @@ class TrackViewActivity : Activity() {
         super.onCreate(savedInstanceState)
         MapLibre.getInstance(this)
         setContentView(R.layout.activity_track_view)
+        findViewById<TextView>(R.id.viewBack).setOnClickListener { finish() }
 
         val serverGeo = intent.getStringExtra("serverGeoJson")
         // 경로 좌표([lon,lat])와 통계를 로컬/서버 중 하나에서 구성
@@ -40,13 +41,18 @@ class TrackViewActivity : Activity() {
             val dist = intent.getDoubleExtra("distanceM", 0.0)
             val dur = intent.getLongExtra("durationMs", 0L)
             val cap = intent.getStringExtra("caption").orEmpty()
-            val sb = StringBuilder()
-            if (cap.isNotBlank()) sb.append("“$cap”\n\n")
-            sb.append("${TrackActivity.formatKm(dist)} · ${TrackActivity.formatDuration(dur)} · ")
-            sb.append("평균 ${TrackActivity.formatPace(dist, dur)}")
-            sb.append("\n${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(dist, dur))} km/h")
-            sb.append(" · ${RunStats.calorieKcal(dist).toInt()} kcal")
-            findViewById<TextView>(R.id.viewStatsText).text = sb.toString()
+            val tags = intent.getStringExtra("tags").orEmpty()
+            val vis = intent.getStringExtra("visibility")
+            val regionCount = intent.getIntExtra("regionCount", -1)
+            val startedIso = intent.getStringExtra("startedAtIso")
+
+            fillStats(
+                dist = dist, dur = dur,
+                dateLabel = startedIso?.let { isoToLabel(it) },
+                caption = cap, tags = tags, visibility = vis,
+                elevText = null,                       // 서버 런은 고도 데이터 없음
+                regionsText = if (regionCount >= 0) "${regionCount}곳" else null,
+            )
             // 서버 런: 포인트별 타임스탬프가 없어 스플릿/GPX/스토리카드는 비활성
             findViewById<Button>(R.id.shareCardButton).visibility = android.view.View.GONE
             findViewById<Button>(R.id.exportGpxButton).visibility = android.view.View.GONE
@@ -65,17 +71,14 @@ class TrackViewActivity : Activity() {
         } else {
             val track = TrackStore(File(filesDir, "tracks")).load(intent.getStringExtra("trackId")!!)
             pts = track.points.map { doubleArrayOf(it.lon, it.lat) }
-            val sb = StringBuilder()
-            sb.append("${TrackActivity.formatKm(track.distanceMeters)} · ")
-            sb.append("${TrackActivity.formatDuration(track.durationMs)} · ")
-            sb.append("평균 ${TrackActivity.formatPace(track.distanceMeters, track.durationMs)}")
-            sb.append("\n${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(track.distanceMeters, track.durationMs))} km/h")
-            sb.append(" · ${RunStats.calorieKcal(track.distanceMeters).toInt()} kcal")
-            sb.append(" · ▲${track.elevationGainM.toInt()}m")
-            RunStats.splitsMs(track.points).forEachIndexed { i, ms ->
-                sb.append("\n${i + 1} km — ${RunStats.formatPaceSec(ms / 1000.0)}")
-            }
-            findViewById<TextView>(R.id.viewStatsText).text = sb.toString()
+            fillStats(
+                dist = track.distanceMeters, dur = track.durationMs,
+                dateLabel = msToLabel(track.startedAtMs),
+                caption = "", tags = "", visibility = null,
+                elevText = "${track.elevationGainM.toInt()} m",
+                regionsText = null,
+            )
+            renderSplits(RunStats.splitsMs(track.points))
             findViewById<Button>(R.id.shareCardButton).setOnClickListener { shareStoryCard(track) }
             findViewById<Button>(R.id.exportGpxButton).setOnClickListener { exportGpx(track) }
         }
@@ -99,6 +102,72 @@ class TrackViewActivity : Activity() {
             }
         }
     }
+
+    /** 상세 카드 채우기 — 거리 헤드라인 + 컬러 스탯 그리드 + 캡션/태그/배지 */
+    private fun fillStats(
+        dist: Double, dur: Long, dateLabel: String?,
+        caption: String, tags: String, visibility: String?,
+        elevText: String?, regionsText: String?,
+    ) {
+        findViewById<TextView>(R.id.viewDistance).text = TrackActivity.formatKm(dist)
+        findViewById<TextView>(R.id.viewDate).text = dateLabel ?: ""
+
+        findViewById<TextView>(R.id.stTime).text = TrackActivity.formatDuration(dur)
+        findViewById<TextView>(R.id.stPace).text = TrackActivity.formatPace(dist, dur)
+        findViewById<TextView>(R.id.stSpeed).text =
+            "${String.format(Locale.US, "%.1f", RunStats.avgSpeedKmh(dist, dur))} km/h"
+        findViewById<TextView>(R.id.stKcal).text = "${RunStats.calorieKcal(dist).toInt()} kcal"
+        findViewById<TextView>(R.id.stElev).text = elevText ?: "—"
+        findViewById<TextView>(R.id.stRegions).text = regionsText ?: "—"
+
+        findViewById<TextView>(R.id.viewCaption).apply {
+            text = caption
+            setVisibility(if (caption.isBlank()) android.view.View.GONE else android.view.View.VISIBLE)
+        }
+        findViewById<TextView>(R.id.viewTags).apply {
+            text = tags
+            setVisibility(if (tags.isBlank()) android.view.View.GONE else android.view.View.VISIBLE)
+        }
+        findViewById<TextView>(R.id.viewBadge).apply {
+            if (visibility == null) { setVisibility(android.view.View.GONE) }
+            else {
+                text = if (visibility == "public") "🔓 공개" else "🔒 비공개"
+                setVisibility(android.view.View.VISIBLE)
+            }
+        }
+    }
+
+    /** 1km 구간 페이스 표 — 가장 빠른 구간은 강조 */
+    private fun renderSplits(splits: List<Long>) {
+        if (splits.isEmpty()) return
+        val card = findViewById<android.view.View>(R.id.splitsCard)
+        val box = findViewById<android.widget.LinearLayout>(R.id.splitsContainer)
+        card.visibility = android.view.View.VISIBLE
+        val fastest = splits.indices.minByOrNull { splits[it] } ?: -1
+        val maxMs = splits.maxOrNull()?.toDouble()?.coerceAtLeast(1.0) ?: 1.0
+        splits.forEachIndexed { i, ms ->
+            val row = layoutInflater.inflate(R.layout.row_split, box, false)
+            val hot = i == fastest
+            row.findViewById<TextView>(R.id.splitIdx).text = "${i + 1}"
+            row.findViewById<TextView>(R.id.splitPace).text = RunStats.formatPaceSec(ms / 1000.0)
+            val bar = row.findViewById<android.view.View>(R.id.splitBar)
+            bar.layoutParams = (bar.layoutParams as android.widget.LinearLayout.LayoutParams).apply {
+                weight = (ms / maxMs).toFloat().coerceIn(0.08f, 1f)
+            }
+            bar.setBackgroundColor(getColor(if (hot) R.color.primary else R.color.gradeCard))
+            if (hot) {
+                row.findViewById<TextView>(R.id.splitIdx).setTextColor(getColor(R.color.primary))
+                row.findViewById<TextView>(R.id.splitPace).setTextColor(getColor(R.color.primary))
+            }
+            box.addView(row)
+        }
+    }
+
+    private val isoFmt = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+    private val labelFmt = java.text.SimpleDateFormat("M월 d일 (E) a h:mm", Locale.KOREA)
+    private fun isoToLabel(iso: String): String? =
+        runCatching { isoFmt.parse(iso.take(19))?.let { labelFmt.format(it) } }.getOrNull()
+    private fun msToLabel(ms: Long): String = labelFmt.format(java.util.Date(ms))
 
     private fun parseLonLat(geojson: String): List<DoubleArray> = runCatching {
         val coords = org.json.JSONObject(geojson).getJSONArray("coordinates")

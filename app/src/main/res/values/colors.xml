@@ -23,4 +23,5 @@
     <color name="gradeBronze">#CD7F32</color>
     <color name="gradeSilver">#8E9196</color>
     <color name="gradeGold">#F5A623</color>
+    <color name="statPink">#FF2D78</color>
 </resources>

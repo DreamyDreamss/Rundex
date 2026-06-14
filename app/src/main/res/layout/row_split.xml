@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp">
+
+    <TextView
+        android:id="@+id/splitIdx"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:fontFeatureSettings="tnum"
+        android:textColor="@color/textDark"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/splitPace"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="2"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center"
+        android:textColor="@color/textDark"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <!-- 페이스 막대(상대 길이) — 가장 빠른 구간은 주황 강조 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="3"
+        android:orientation="horizontal"
+        android:paddingStart="10dp">
+
+        <View
+            android:id="@+id/splitBar"
+            android:layout_width="0dp"
+            android:layout_height="9dp"
+            android:layout_weight="0.5" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+</LinearLayout>

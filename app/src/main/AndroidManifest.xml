@@ -45,6 +45,10 @@
             android:label="기록 보기"
             android:exported="false" />
         <activity
+            android:name=".RunHistoryActivity"
+            android:label="러닝 기록"
+            android:exported="false" />
+        <activity
             android:name=".DexActivity"
             android:label="도감"
             android:exported="false" />

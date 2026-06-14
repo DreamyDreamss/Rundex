@@ -207,21 +207,34 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         setState()
     }
 
-    /** 3·2·1 카운트다운 애니메이션 후 콜백 */
+    /** 3·2·1 카운트다운 애니메이션 후 콜백 — 매 카운트 햅틱, 마지막엔 GO! */
     private fun runCountdown(onDone: () -> Unit) {
         counting = true
         countdownOverlay.visibility = View.VISIBLE
+        val sub = findViewById<TextView>(R.id.countdownSub)
+        sub.text = "잠시 후 시작해요"
         val h = Handler(Looper.getMainLooper())
         fun tick(n: Int) {
             if (n == 0) {
-                counting = false
-                countdownOverlay.visibility = View.GONE
-                onDone()
+                // GO! 한 박자 보여주고 시작
+                countdownText.text = "GO!"
+                countdownText.setTextColor(getColor(R.color.primary))
+                sub.text = "출발 🏃"
+                countdownText.scaleX = 0.5f; countdownText.scaleY = 0.5f; countdownText.alpha = 0f
+                countdownText.animate().scaleX(1.15f).scaleY(1.15f).alpha(1f).setDuration(260).start()
+                vibrate(120)
+                h.postDelayed({
+                    counting = false
+                    countdownOverlay.visibility = View.GONE
+                    countdownText.text = "3"   // 다음 사용 대비 초기화
+                    onDone()
+                }, 650)
                 return
             }
             countdownText.text = n.toString()
             countdownText.scaleX = 0.4f; countdownText.scaleY = 0.4f; countdownText.alpha = 0f
             countdownText.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(380).start()
+            vibrate(40)
             h.postDelayed({ tick(n - 1) }, 800)
         }
         tick(3)
@@ -496,16 +509,17 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             vibrate()
         }
         offRoute = nowOff
+        findViewById<View>(R.id.offRouteBanner).visibility = if (nowOff) View.VISIBLE else View.GONE
     }
 
-    private fun vibrate() {
+    private fun vibrate(ms: Long = 500L) {
         val v = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             (getSystemService(VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
         } else {
             @Suppress("DEPRECATION")
             getSystemService(VIBRATOR_SERVICE) as Vibrator
         }
-        v.vibrate(VibrationEffect.createOneShot(500L, VibrationEffect.DEFAULT_AMPLITUDE))
+        v.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
     private fun refreshStats() {
@@ -529,6 +543,9 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         findViewById<TextView>(R.id.mapTime).text = time
         findViewById<TextView>(R.id.mapKcal).text = kcal
         findViewById<TextView>(R.id.mapElev).text = "${TrackRecorder.elevationGainM.toInt()} m"
+        // 평균 속도 km/h (시간>0일 때만)
+        val kmh = if (elapsed > 0) dist / 1000.0 / (elapsed / 3_600_000.0) else 0.0
+        findViewById<TextView>(R.id.mapSpeed).text = String.format(Locale.US, "%.1f", kmh)
     }
 
     private fun redrawTrack() {
