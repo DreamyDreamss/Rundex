@@ -2,6 +2,8 @@ package com.rundex.routepoc
 
 import android.app.Activity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
@@ -42,9 +44,24 @@ class CrewDetailActivity : Activity() {
         findViewById<TextView>(R.id.challengeSet).setOnClickListener { setChallengeDialog() }
     }
 
+    private val poll = Handler(Looper.getMainLooper())
+    private val tick = object : Runnable {
+        override fun run() {
+            if (isMember) loadMessages()
+            loadChallenge()
+            poll.postDelayed(this, 6000)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         loadDetail(); loadChallenge(); loadMessages()
+        poll.postDelayed(tick, 6000)   // 채팅·챌린지 6초마다 갱신(살아있는 대화)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        poll.removeCallbacks(tick)
     }
 
     private fun api() = ApiClient(Session(this))
@@ -99,6 +116,7 @@ class CrewDetailActivity : Activity() {
         api().getCrewMessages(crewId) { r ->
             r.onSuccess { arr ->
                 runOnUiThread {
+                    val before = chat.size
                     chat.clear()
                     for (i in 0 until arr.length()) {
                         val o = arr.getJSONObject(i)
@@ -106,6 +124,12 @@ class CrewDetailActivity : Activity() {
                         chat.add(name to o.optString("text"))
                     }
                     chatAdapter.notifyDataSetChanged()
+                    // 새 메시지가 생겼으면 맨 아래로 스크롤
+                    if (chat.size != before && chat.isNotEmpty()) {
+                        findViewById<ListView>(R.id.crewChat).post {
+                            findViewById<ListView>(R.id.crewChat).setSelection(chat.size - 1)
+                        }
+                    }
                 }
             }
         }
