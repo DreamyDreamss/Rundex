@@ -52,6 +52,13 @@ class ApiClient(
     fun getMyStats(cb: (Result<JSONObject>) -> Unit) =
         postObject("/rest/v1/rpc/my_stats", JSONObject(), cb)
 
+    /** 내 알림 — 내 러닝에 좋아요 / 나를 팔로우 (최신순) */
+    fun getNotifications(cb: (Result<JSONArray>) -> Unit) {
+        val req = build("/rest/v1/rpc/my_notifications")
+            ?.post("{}".toRequestBody(jsonMedia))?.build() ?: return cb(skipped())
+        enqueue(req) { raw -> cb(raw.map { JSONArray(it) }) }
+    }
+
     /** 도감 지도용 — 내가 발견한 동의 경계(GeoJSON)+누적거리 */
     fun getMyDexGeo(userId: String, cb: (Result<JSONArray>) -> Unit) =
         getArray("/rest/v1/my_dex_geo?user_id=eq.$userId&select=region_code,name,total_m,geojson", cb)

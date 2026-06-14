@@ -22,6 +22,7 @@ class FeedActivity : Activity() {
         findViewById<ListView>(R.id.feedList).adapter = adapter
         findViewById<TextView>(R.id.feedTabAll).setOnClickListener { switchTab(false) }
         findViewById<TextView>(R.id.feedTabFollowing).setOnClickListener { switchTab(true) }
+        findViewById<TextView>(R.id.feedNotif).setOnClickListener { showNotifications() }
         findViewById<androidx.swiperefreshlayout.widget.SwipeRefreshLayout>(R.id.feedRefresh).apply {
             setColorSchemeColors(getColor(R.color.primary))
             setOnRefreshListener { load() }
@@ -113,6 +114,79 @@ class FeedActivity : Activity() {
         empty.visibility = if (items.isEmpty()) View.VISIBLE else View.GONE
         empty.text = if (followingMode) "팔로우한 사람의 공개 러닝이 없어요.\n친구를 팔로우해보세요!"
         else "아직 공개된 러닝이 없어요.\n첫 기록을 공개해보세요!"
+    }
+
+    /** 🔔 알림 — 내 러닝 좋아요 / 나를 팔로우한 사람 (최신순) */
+    private fun showNotifications() {
+        if (!ApiConfig.enabled) {
+            android.widget.Toast.makeText(this, "서버 연결 전입니다", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        ApiClient(Session(this)).getNotifications { r ->
+            runOnUiThread {
+                r.onSuccess { arr -> renderNotifications(arr) }
+                    .onFailure { android.widget.Toast.makeText(this, "알림을 불러올 수 없어요", android.widget.Toast.LENGTH_SHORT).show() }
+            }
+        }
+    }
+
+    private fun renderNotifications(arr: org.json.JSONArray) {
+        val pad = (20 * resources.displayMetrics.density).toInt()
+        val box = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, pad / 2)
+        }
+        if (arr.length() == 0) {
+            box.addView(TextView(this).apply {
+                text = "아직 새로운 알림이 없어요.\n러닝을 공개하면 좋아요·팔로우 소식이 여기에 모여요 🔔"
+                setTextColor(getColor(R.color.textGrey)); textSize = 14f
+                setPadding(0, pad / 2, 0, pad / 2)
+            })
+        } else {
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val name = o.optString("name").takeIf { it.isNotBlank() && it != "null" } ?: "러너"
+                val line = when (o.optString("type")) {
+                    "like" -> "❤️  $name 님이 회원님의 러닝을 좋아합니다"
+                    "follow" -> "👤  $name 님이 회원님을 팔로우했습니다"
+                    else -> "🔔  $name"
+                }
+                box.addView(TextView(this).apply {
+                    text = line + "\n" + relTime(o.optString("at"))
+                    setTextColor(getColor(R.color.textDark)); textSize = 14f
+                    setLineSpacing(0f, 1.15f)
+                    setPadding(0, pad / 3, 0, pad / 3)
+                })
+                if (i < arr.length() - 1) box.addView(View(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 1)
+                    setBackgroundColor(0x14000000)
+                })
+            }
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(box) }
+        android.app.AlertDialog.Builder(this, R.style.RundexDialog)
+            .setTitle("🔔 알림")
+            .setView(scroll)
+            .setPositiveButton("확인", null)
+            .show()
+    }
+
+    private fun relTime(iso: String): String {
+        if (iso.isBlank() || iso == "null") return ""
+        val t = runCatching {
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .parse(iso.take(19))?.time
+        }.getOrNull() ?: return ""
+        val diff = System.currentTimeMillis() - t
+        return when {
+            diff < 60_000 -> "방금 전"
+            diff < 3_600_000 -> "${diff / 60_000}분 전"
+            diff < 86_400_000 -> "${diff / 3_600_000}시간 전"
+            diff < 604_800_000 -> "${diff / 86_400_000}일 전"
+            else -> java.text.SimpleDateFormat("M월 d일", java.util.Locale.KOREA).format(java.util.Date(t))
+        }
     }
 
     private fun showError() {
