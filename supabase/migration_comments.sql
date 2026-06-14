@@ -31,3 +31,26 @@ select r.id as run_id, r.user_id, p.display_name, p.handle, p.rep_title_ids,
   exists(select 1 from run_reactions rr where rr.run_id = r.id and rr.user_id = auth.uid()) as liked_by_me
 from runs r join profiles p on p.id = r.user_id
 where r.visibility = 'public';
+
+-- 알림(🔔)에 댓글 추가: 좋아요 + 댓글 + 팔로우 통합(최신순)
+create or replace function my_notifications()
+returns jsonb language sql security definer set search_path to 'public' as $$
+  select coalesce(jsonb_agg(n order by (n->>'at') desc), '[]'::jsonb) from (
+    select jsonb_build_object('type','like','name',p.display_name,'at',rr.created_at,'text','') n
+    from run_reactions rr
+    join runs r on r.id = rr.run_id and r.user_id = auth.uid()
+    join profiles p on p.id = rr.user_id
+    where rr.user_id <> auth.uid()
+    union all
+    select jsonb_build_object('type','comment','name',p.display_name,'at',c.created_at,'text',c.text)
+    from run_comments c
+    join runs r on r.id = c.run_id and r.user_id = auth.uid()
+    join profiles p on p.id = c.user_id
+    where c.user_id <> auth.uid()
+    union all
+    select jsonb_build_object('type','follow','name',p.display_name,'at',f.created_at,'text','')
+    from follows f join profiles p on p.id = f.follower_id
+    where f.followee_id = auth.uid()
+  ) t
+  limit 50;
+$$;

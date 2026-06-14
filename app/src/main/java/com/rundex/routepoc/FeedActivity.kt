@@ -168,6 +168,10 @@ class FeedActivity : Activity() {
                 val line = when (o.optString("type")) {
                     "like" -> "❤️  $name 님이 회원님의 러닝을 좋아합니다"
                     "follow" -> "👤  $name 님이 회원님을 팔로우했습니다"
+                    "comment" -> {
+                        val t = o.optString("text").takeIf { it.isNotBlank() && it != "null" } ?: ""
+                        "💬  $name 님이 댓글을 남겼습니다" + if (t.isNotBlank()) ": $t" else ""
+                    }
                     else -> "🔔  $name"
                 }
                 box.addView(TextView(this).apply {
