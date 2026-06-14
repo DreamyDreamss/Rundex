@@ -18,7 +18,8 @@ class FeedActivity : Activity() {
         setContentView(R.layout.activity_feed)
         NavBar.setup(this, R.id.navFeed)
 
-        adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRunDetail(pos) }, { pos -> openProfile(pos) })
+        adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRunDetail(pos) },
+            { pos -> openProfile(pos) }, { pos -> openComments(pos) })
         findViewById<ListView>(R.id.feedList).adapter = adapter
         findViewById<TextView>(R.id.feedTabAll).setOnClickListener { switchTab(false) }
         findViewById<TextView>(R.id.feedTabFollowing).setOnClickListener { switchTab(true) }
@@ -76,6 +77,12 @@ class FeedActivity : Activity() {
                 .putExtra("userId", it.userId)
                 .putExtra("name", it.name)
         )
+    }
+
+    /** 피드 카드 💬 → 댓글 다이얼로그 (작성 후 피드 새로고침으로 카운트 갱신) */
+    private fun openComments(pos: Int) {
+        if (pos >= items.size) return
+        CommentsDialog.show(this, items[pos].runId) { load() }
     }
 
     /** 좋아요 토글 — 낙관적 갱신 후 서버 반영 */

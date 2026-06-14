@@ -23,7 +23,8 @@ class PublicProfileActivity : Activity() {
         userId = intent.getStringExtra("userId") ?: run { finish(); return }
 
         findViewById<TextView>(R.id.ppBack).setOnClickListener { finish() }
-        adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRun(pos) })
+        adapter = FeedAdapter(this, items, { pos -> toggleLike(pos) }, { pos -> openRun(pos) },
+            {}, { pos -> if (pos < items.size) CommentsDialog.show(this, items[pos].runId) { loadRuns() } })
         findViewById<ListView>(R.id.ppRunList).adapter = adapter
         findViewById<TextView>(R.id.ppFollow).setOnClickListener { toggleFollow() }
 

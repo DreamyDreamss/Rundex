@@ -25,6 +25,7 @@ data class FeedItem(
     val tags: String,               // "#한강 #야간런"
     var likeCount: Int,
     var likedByMe: Boolean,
+    val commentCount: Int,
     val distanceM: Double,
     val durationMs: Long,
 )
@@ -35,6 +36,7 @@ class FeedAdapter(
     private val onToggleLike: (Int) -> Unit = {},
     private val onOpen: (Int) -> Unit = {},
     private val onOpenProfile: (Int) -> Unit = {},
+    private val onOpenComments: (Int) -> Unit = {},
 ) : ArrayAdapter<FeedItem>(activity, R.layout.row_feed, items) {
 
     override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
@@ -48,6 +50,10 @@ class FeedAdapter(
         v.findViewById<TextView>(R.id.feedLike).apply {
             text = (if (it.likedByMe) "❤️ " else "🤍 ") + it.likeCount
             setOnClickListener { onToggleLike(position) }
+        }
+        v.findViewById<TextView>(R.id.feedComment).apply {
+            text = "💬 ${it.commentCount}"
+            setOnClickListener { onOpenComments(position) }
         }
         v.findViewById<TextView>(R.id.feedName).text = it.name
         v.findViewById<TextView>(R.id.feedWhen).text = it.whenText
@@ -90,6 +96,7 @@ class FeedAdapter(
                 userId = o.optString("user_id"),
                 likeCount = o.optInt("like_count"),
                 likedByMe = o.optBoolean("liked_by_me"),
+                commentCount = o.optInt("comment_count"),
                 distanceM = o.optDouble("distance_m"),
                 durationMs = o.optLong("duration_ms"),
             )

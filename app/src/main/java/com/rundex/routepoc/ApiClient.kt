@@ -121,6 +121,20 @@ class ApiClient(
     fun unlikeRun(runId: String, userId: String, cb: (Result<JSONObject>) -> Unit = {}) =
         sendNoBody("DELETE", "/rest/v1/run_reactions?run_id=eq.$runId&user_id=eq.$userId", cb)
 
+    /** 러닝 댓글 목록 (작성자 이름 포함, 오래된순) */
+    fun getRunComments(runId: String, cb: (Result<JSONArray>) -> Unit) =
+        getArray(
+            "/rest/v1/run_comments?run_id=eq.$runId" +
+                "&select=text,created_at,profiles(display_name,handle)&order=created_at.asc", cb
+        )
+
+    /** 댓글 작성 */
+    fun postRunComment(runId: String, userId: String, text: String, cb: (Result<JSONObject>) -> Unit = {}) =
+        sendArrayAsObject(
+            "POST", "/rest/v1/run_comments",
+            JSONObject().put("run_id", runId).put("user_id", userId).put("text", text), cb
+        )
+
     /** 내 러닝 기록(서버) — 최신순. 공개여부·경로(GeoJSON)·캡션 포함 */
     fun listMyRuns(userId: String, cb: (Result<JSONArray>) -> Unit) =
         getArray(
