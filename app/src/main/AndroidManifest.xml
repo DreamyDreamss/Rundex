@@ -65,6 +65,10 @@
             android:label="목록"
             android:exported="false" />
         <activity
+            android:name=".StatsActivity"
+            android:label="러닝 인사이트"
+            android:exported="false" />
+        <activity
             android:name=".DexActivity"
             android:label="도감"
             android:exported="false" />

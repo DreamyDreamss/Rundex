@@ -298,6 +298,7 @@ class ProfileActivity : Activity() {
         })
         val dialog = android.app.Dialog(this, R.style.RundexDialog)
         val entries = listOf(
+            Triple("📊", "러닝 인사이트", StatsActivity::class.java),
             Triple("🏅", "칭호 보관함", TitleActivity::class.java),
             Triple("📜", "러닝 기록", RunHistoryActivity::class.java),
             Triple("🔖", "코스 보관함", BookmarksActivity::class.java),

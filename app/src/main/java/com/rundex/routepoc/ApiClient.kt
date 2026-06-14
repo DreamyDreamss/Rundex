@@ -52,6 +52,10 @@ class ApiClient(
     fun getMyStats(cb: (Result<JSONObject>) -> Unit) =
         postObject("/rest/v1/rpc/my_stats", JSONObject(), cb)
 
+    /** 러닝 인사이트 — 주간 거리(8주)·최장거리·최고페이스·이달·누적 */
+    fun getInsights(cb: (Result<JSONObject>) -> Unit) =
+        postObject("/rest/v1/rpc/my_insights", JSONObject(), cb)
+
     /** 다른 사용자 공개 프로필 — 이름·핸들·발견동·공개러닝수·칭호·팔로워·내가 팔로우중인지 */
     fun getPublicProfile(userId: String, cb: (Result<JSONObject>) -> Unit) =
         postObject("/rest/v1/rpc/public_profile", JSONObject().put("p_user", userId), cb)
