@@ -124,7 +124,8 @@ object CommentsDialog {
             }
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
-                val name = o.optJSONObject("profiles")?.optString("display_name")?.takeIf { it.isNotBlank() } ?: "러너"
+                val name = o.optString("name").takeIf { it.isNotBlank() && it != "null" }
+                    ?: o.optJSONObject("profiles")?.optString("display_name")?.takeIf { it.isNotBlank() } ?: "러너"
                 val row = LinearLayout(activity).apply {
                     orientation = LinearLayout.HORIZONTAL; setPadding(0, px(10), 0, px(10))
                 }
@@ -155,11 +156,31 @@ object CommentsDialog {
                     setOnClickListener { input.requestFocus() }
                 })
                 row.addView(col)
-                // 우측 하트(시각 토글)
-                row.addView(TextView(activity).apply {
-                    text = "🤍"; textSize = 15f; setPadding(px(8), px(2), 0, 0)
-                    setOnClickListener { text = if (text == "🤍") "❤️" else "🤍" }
-                })
+                // 우측 하트 — 서버 저장(댓글 좋아요)
+                val cid = o.optString("id")
+                val likeCol = LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                    setPadding(px(8), px(2), 0, 0)
+                }
+                val likedInit = o.optBoolean("liked_by_me")
+                val countInit = o.optInt("likes")
+                val heart = TextView(activity).apply { text = if (likedInit) "❤️" else "🤍"; textSize = 15f; gravity = Gravity.CENTER }
+                val cnt = TextView(activity).apply {
+                    text = if (countInit > 0) "$countInit" else ""
+                    textSize = 11f; setTextColor(activity.getColor(R.color.textGrey)); gravity = Gravity.CENTER
+                }
+                var liked = likedInit; var count = countInit
+                heart.setOnClickListener {
+                    val uid = Session(activity).userId ?: return@setOnClickListener
+                    liked = !liked
+                    count = (count + if (liked) 1 else -1).coerceAtLeast(0)
+                    heart.text = if (liked) "❤️" else "🤍"
+                    cnt.text = if (count > 0) "$count" else ""
+                    val api = ApiClient(Session(activity))
+                    if (liked) api.likeComment(cid, uid) else api.unlikeComment(cid, uid)
+                }
+                likeCol.addView(heart); likeCol.addView(cnt)
+                row.addView(likeCol)
                 listBox.addView(row)
             }
             scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }

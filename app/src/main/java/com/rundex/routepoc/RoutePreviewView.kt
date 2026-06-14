@@ -27,6 +27,10 @@ class RoutePreviewView @JvmOverloads constructor(
         strokeJoin = Paint.Join.ROUND
     }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val grid = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#E4E7EC"); style = Paint.Style.STROKE; strokeWidth = 1.5f
+    }
+    private val density = resources.displayMetrics.density
 
     fun setRoute(points: List<DoubleArray>) {
         pts = points
@@ -35,7 +39,22 @@ class RoutePreviewView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (pts.size < 2) return
+
+        // 지도풍 배경(연한 종이 + 격자) — 둥근 모서리 클립
+        val radius = 14f * density
+        val clip = android.graphics.Path().apply {
+            addRoundRect(0f, 0f, width.toFloat(), height.toFloat(), radius, radius, android.graphics.Path.Direction.CW)
+        }
+        canvas.save()
+        canvas.clipPath(clip)
+        canvas.drawColor(Color.parseColor("#F2F4F7"))
+        val step = 26f * density
+        var gx = step
+        while (gx < width) { canvas.drawLine(gx, 0f, gx, height.toFloat(), grid); gx += step }
+        var gy = step
+        while (gy < height) { canvas.drawLine(0f, gy, width.toFloat(), gy, grid); gy += step }
+
+        if (pts.size < 2) { canvas.restore(); return }
 
         val pad = 24f
         val w = width - pad * 2
@@ -66,5 +85,6 @@ class RoutePreviewView @JvmOverloads constructor(
         canvas.drawCircle(sx(pts.first()[0]), sy(pts.first()[1]), 9f, dot)
         dot.color = Color.parseColor("#E74C3C")  // 도착 — 빨강
         canvas.drawCircle(sx(pts.last()[0]), sy(pts.last()[1]), 9f, dot)
+        canvas.restore()
     }
 }
