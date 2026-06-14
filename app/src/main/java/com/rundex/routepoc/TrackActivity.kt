@@ -361,29 +361,22 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
             newTitles = TitleEngine.evaluate(ctx, TitleStore(dataDir), System.currentTimeMillis())
         }
 
-        val sb = StringBuilder()
-        sb.append("${formatKm(track.distanceMeters)} · ${formatDuration(track.durationMs)} 기록 저장됨")
+        // 성취 항목 구조화 (새 동 / 승급 / 칭호 / 테마)
+        val ach = ArrayList<String>()
         if (index == null) {
-            sb.append("\n\n도감 데이터를 불러올 수 없어 도감 반영을 건너뜀")
-        } else if (result != null) {
-            if (result.newRegions.isNotEmpty()) {
-                sb.append("\n\n🗺 새 동 ${result.newRegions.size}곳 발견!")
-                sb.append("\n${result.newRegions.joinToString(", ") { it.name }}")
-            }
-            result.gradeUps.forEach {
-                sb.append("\n⬆ ${it.name} ${it.from.label} → ${it.to.label} 승급!")
-            }
-            if (result.newRegions.isEmpty() && result.gradeUps.isEmpty()) {
-                sb.append("\n\n도감 변동 없음 (수집 지역 밖이거나 기존 지역)")
-            }
+            ach.add("⚠ 도감 데이터를 불러올 수 없어 반영을 건너뜀")
+        } else result?.let {
+            if (it.newRegions.isNotEmpty())
+                ach.add("🗺 새 동 ${it.newRegions.size}곳 발견 — ${it.newRegions.joinToString(", ") { r -> r.name }}")
+            it.gradeUps.forEach { g -> ach.add("⬆ ${g.name} ${g.from.label} → ${g.to.label} 승급!") }
         }
-        newTitles.forEach { sb.append("\n🏅 칭호 획득: [${it.name}]") }
+        newTitles.forEach { ach.add("🏅 칭호 획득 — ${it.name}") }
         themeDeltas.forEach { d ->
-            sb.append("\n🌟 ${d.title} +${d.newPlaces.size} (${d.newPlaces.joinToString(", ") { it.name }})")
-            if (d.completed) sb.append("\n🏆 [${d.title}] 컬렉션 완성!")
+            ach.add("🌟 ${d.title} +${d.newPlaces.size} (${d.newPlaces.joinToString(", ") { it.name }})")
+            if (d.completed) ach.add("🏆 [${d.title}] 컬렉션 완성!")
         }
 
-        // 공개 여부 + 글/태그 입력 → 서버 업로드 → 결과 요약
+        // 공개 여부 + 글/태그 입력 → 서버 업로드 → 결과 축하 화면
         val view = layoutInflater.inflate(R.layout.dialog_publish, null)
         val captionInput = view.findViewById<EditText>(R.id.captionInput)
         val tagsInput = view.findViewById<EditText>(R.id.tagsInput)
@@ -394,13 +387,55 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         }
         view.findViewById<TextView>(R.id.btnPrivate).setOnClickListener {
             submitRunToServer(track, "private", "", emptyList())
-            dialog.dismiss(); showRunSummary(sb.toString())
+            dialog.dismiss(); showRunResult(track, ach)
         }
         view.findViewById<TextView>(R.id.btnPublish).setOnClickListener {
             submitRunToServer(track, "public",
                 captionInput.text.toString().trim(), parseTags(tagsInput.text.toString()))
-            dialog.dismiss(); showRunSummary(sb.toString())
+            dialog.dismiss(); showRunResult(track, ach)
         }
+        dialog.show()
+    }
+
+    /** 러닝 완료 축하 화면 — 거리/시간/페이스/칼로리 + 성취 목록 */
+    private fun showRunResult(track: SavedTrack, achievements: List<String>) {
+        val view = layoutInflater.inflate(R.layout.dialog_result, null)
+        view.findViewById<TextView>(R.id.resDistance).text = formatKm(track.distanceMeters)
+        view.findViewById<TextView>(R.id.resTime).text = formatDuration(track.durationMs)
+        view.findViewById<TextView>(R.id.resPace).text = formatPace(track.distanceMeters, track.durationMs)
+        view.findViewById<TextView>(R.id.resKcal).text = "${RunStats.calorieKcal(track.distanceMeters).toInt()}"
+
+        val box = view.findViewById<android.widget.LinearLayout>(R.id.resAchievements)
+        val pad = (12 * resources.displayMetrics.density).toInt()
+        if (achievements.isEmpty()) {
+            box.addView(TextView(this).apply {
+                text = "이번 러닝은 도감 변동이 없었어요.\n새로운 동네로 달려보세요! 🏃"
+                setTextColor(getColor(R.color.textGrey)); textSize = 13f; gravity = android.view.Gravity.CENTER
+            })
+        } else {
+            achievements.forEach { line ->
+                box.addView(TextView(this).apply {
+                    text = line
+                    setTextColor(getColor(R.color.textDark)); textSize = 14f
+                    setBackgroundResource(R.drawable.card_inset)
+                    setPadding(pad, pad, pad, pad)
+                    val lp = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                        android.widget.LinearLayout.LayoutParams.WRAP_CONTENT)
+                    lp.bottomMargin = pad / 2
+                    layoutParams = lp
+                })
+            }
+        }
+
+        val dialog = android.app.Dialog(this, R.style.RundexDialog).apply {
+            setContentView(view)
+            window?.setBackgroundDrawableResource(android.R.color.transparent)
+        }
+        view.findViewById<TextView>(R.id.resDexButton).setOnClickListener {
+            dialog.dismiss(); startActivity(Intent(this, DexActivity::class.java))
+        }
+        view.findViewById<TextView>(R.id.resOkButton).setOnClickListener { dialog.dismiss() }
         dialog.show()
     }
 
@@ -429,16 +464,6 @@ class TrackActivity : Activity(), TrackRecorder.Listener {
         }
     }
 
-    private fun showRunSummary(message: String) {
-        AlertDialog.Builder(this, R.style.RundexDialog)
-            .setTitle("러닝 완료")
-            .setMessage(message)
-            .setPositiveButton("확인", null)
-            .setNeutralButton("도감 보기") { _, _ ->
-                startActivity(Intent(this, DexActivity::class.java))
-            }
-            .show()
-    }
 
     private fun hasPermissions(): Boolean =
         checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED

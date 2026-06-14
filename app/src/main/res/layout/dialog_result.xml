@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/dialog_bg"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="🎉 러닝 완료!"
+        android:textColor="@color/primary"
+        android:textSize="22sp"
+        android:textStyle="bold" />
+
+    <!-- 거리 헤드라인 -->
+    <TextView
+        android:id="@+id/resDistance"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:fontFeatureSettings="tnum"
+        android:gravity="center"
+        android:text="0.00 km"
+        android:textColor="@color/textDark"
+        android:textSize="44sp"
+        android:textStyle="bold" />
+
+    <!-- 시간 / 페이스 / 칼로리 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="horizontal">
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+            <TextView android:id="@+id/resTime" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum" android:textColor="@color/accent" android:textSize="20sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="시간" android:textColor="@color/textGrey" android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+            <TextView android:id="@+id/resPace" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum" android:textColor="@color/primary" android:textSize="20sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="평균 페이스" android:textColor="@color/textGrey" android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1" android:gravity="center" android:orientation="vertical">
+            <TextView android:id="@+id/resKcal" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:fontFeatureSettings="tnum" android:textColor="@color/statPink" android:textSize="20sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="kcal" android:textColor="@color/textGrey" android:textSize="11sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="18dp"
+        android:background="@color/divider" />
+
+    <!-- 성취(새 동/승급/칭호/테마) — 코드로 채움 -->
+    <LinearLayout
+        android:id="@+id/resAchievements"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="vertical" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/resDexButton"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="48dp"
+            android:background="@drawable/btn_circle_secondary"
+            android:gravity="center"
+            android:text="🎨 도감 보기"
+            android:textColor="@color/textDark"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/resOkButton"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="48dp"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/btn_primary"
+            android:gravity="center"
+            android:text="확인"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</LinearLayout>
